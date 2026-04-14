@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Well Interference Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1923;
+    --panel: #162230;
+    --panel-border: #1e3347;
+    --text: #c8d6e5;
+    --text-muted: #6b8299;
+    --accent: #00b4d8;
+    --accent2: #e07a5f;
+    --ground: #3d2b1f;
+    --ground-light: #5c4033;
+    --water: #0077b6;
+    --water-light: #00b4d8;
+    --water-surface: #90e0ef;
+    --interference: #ff6b6b;
+    --well-color: #8d99ae;
+    --slider-track: #1e3347;
+    --slider-thumb: #00b4d8;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .app-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 20px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  .header p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .main-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Control Panel */
+  .control-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .control-group-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 6px;
+  }
+
+  .control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  .control-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .control-value.well-b {
+    color: var(--accent2);
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--slider-track);
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--slider-thumb);
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0, 180, 216, 0.4);
+  }
+
+  input[type="range"].well-b::-webkit-slider-thumb {
+    background: var(--accent2);
+    box-shadow: 0 0 6px rgba(224, 122, 95, 0.4);
+  }
+
+  /* Toggle switches */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--slider-track);
+    border-radius: 11px;
+    transition: 0.2s;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--accent);
+  }
+
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+    background: #fff;
+  }
+
+  /* Readout */
+  .readout-panel {
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  .readout-panel .val {
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .readout-panel .interference-val {
+    color: var(--interference);
+    font-weight: 600;
+  }
+
+  /* Canvas area */
+  .canvas-wrapper {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    cursor: crosshair;
+  }
+
+  .legend {
+    display: flex;
+    gap: 20px;
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.2);
+    border-top: 1px solid var(--panel-border);
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .legend-line {
+    width: 24px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  .legend-line.dashed {
+    background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px);
+    height: 2px;
+  }
+
+  .tooltip {
+    position: absolute;
+    background: rgba(15, 25, 35, 0.95);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 10;
+    line-height: 1.6;
+    color: var(--text);
+    min-width: 180px;
+  }
+
+  .tooltip.visible { opacity: 1; }
+
+  .equation-bar {
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--panel-border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .equation-bar span {
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header">
+    <h1>Well Interference — Cross-Section Simulation</h1>
+    <p>Superposition of Drawdown from Two Pumping Wells (Thiem Equation)</p>
+  </div>
+
+  <div class="main-layout">
+    <!-- Controls -->
+    <div class="control-panel">
+      <div class="control-group">
+        <div class="control-group-title">Well A (Left)</div>
+        <div class="control-row">
+          <div class="control-label">
+            Pumping Rate Q₁
+            <span class="control-value" id="q1Val">0.05 m³/s</span>
+          </div>
+          <input type="range" id="q1" min="0" max="0.15" step="0.005" value="0.05">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">Well B (Right)</div>
+        <div class="control-row">
+          <div class="control-label">
+            Pumping Rate Q₂
+            <span class="control-value well-b" id="q2Val">0.05 m³/s</span>
+          </div>
+          <input type="range" id="q2" min="0" max="0.15" step="0.005" value="0.05" class="well-b">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">Aquifer Properties</div>
+        <div class="control-row">
+          <div class="control-label">
+            Transmissivity T
+            <span class="control-value" id="tVal">0.02 m²/s</span>
+          </div>
+          <input type="range" id="T" min="0.005" max="0.08" step="0.001" value="0.02">
+        </div>
+        <div class="control-row">
+          <div class="control-label">
+            Radius of Influence R
+            <span class="control-value" id="rVal">300 m</span>
+          </div>
+          <input type="range" id="R" min="100" max="600" step="10" value="300">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">Well Spacing</div>
+        <div class="control-row">
+          <div class="control-label">
+            Distance (center to center)
+            <span class="control-value" id="dVal">200 m</span>
+          </div>
+          <input type="range" id="dist" min="30" max="500" step="5" value="200">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">Display</div>
+        <div class="toggle-row">
+          <span>Individual Cones</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="showIndividual" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span>Combined Drawdown</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="showCombined" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span>Interference Zone</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="showInterference" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="control-group-title">Midpoint Readout</div>
+        <div class="readout-panel" id="readout">
+          Drawdown A: <span class="val">—</span><br>
+          Drawdown B: <span class="val">—</span><br>
+          Combined: <span class="val">—</span><br>
+          Interference: <span class="interference-val">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrapper">
+      <div class="equation-bar">
+        Thiem: <span>s = (Q / 2πT) × ln(R / r)</span> &nbsp;|&nbsp; Superposition: <span>s_total = s₁ + s₂</span>
+      </div>
+      <canvas id="simCanvas"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-line" style="background: #90e0ef;"></div>
+          Original Water Table
+        </div>
+        <div class="legend-item">
+          <div class="legend-line dashed" style="color: #00b4d8;"></div>
+          Well A Cone
+        </div>
+        <div class="legend-item">
+          <div class="legend-line dashed" style="color: #e07a5f;"></div>
+          Well B Cone
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="background: #fff;"></div>
+          Combined Drawdown
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="background: rgba(255,107,107,0.3);"></div>
+          Interference Zone
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// Sizing
+function resize() {
+  const wrapper = canvas.parentElement;
+  const w = wrapper.clientWidth;
+  const h = Math.max(480, Math.min(w * 0.55, 580));
+  canvas.width = w * 2;
+  canvas.height = h * 2;
+  canvas.style.height = h + 'px';
+  ctx.setTransform(2, 0, 0, 2, 0, 0); // retina
+  draw();
+}
+
+// Params
+function getParams() {
+  return {
+    Q1: parseFloat(document.getElementById('q1').value),
+    Q2: parseFloat(document.getElementById('q2').value),
+    T: parseFloat(document.getElementById('T').value),
+    R: parseFloat(document.getElementById('R').value),
+    dist: parseFloat(document.getElementById('dist').value),
+    showIndividual: document.getElementById('showIndividual').checked,
+    showCombined: document.getElementById('showCombined').checked,
+    showInterference: document.getElementById('showInterference').checked,
+  };
+}
+
+// Thiem drawdown
+function drawdown(Q, T, R, r) {
+  if (r < 0.3) r = 0.3; // well radius
+  if (r >= R) return 0;
+  return (Q / (2 * Math.PI * T)) * Math.log(R / r);
+}
+
+// Map world x (meters) to canvas x
+function worldToCanvasX(worldX, totalSpan, canvasW, padding) {
+  return padding + ((worldX + totalSpan / 2) / totalSpan) * (canvasW - 2 * padding);
+}
+
+function canvasToWorldX(cx, totalSpan, canvasW, padding) {
+  return ((cx - padding) / (canvasW - 2 * padding)) * totalSpan - totalSpan / 2;
+}
+
+function draw() {
+  const p = getParams();
+  const W = canvas.width / 2;
+  const H = canvas.height / 2;
+  const pad = 60;
+
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+
+  // Layout
+  const groundY = 70;       // ground surface
+  const waterTableY = 130;  // static water table
+  const aquiferBottom = H - 50;
+  const maxDrawdownPx = aquiferBottom - waterTableY - 20;
+
+  // World span — enough to cover radius of influence from both wells
+  const halfDist = p.dist / 2;
+  const totalSpan = Math.max(p.dist + p.R * 2, 800);
+
+  // Well positions in world coords
+  const wellA_world = -halfDist;
+  const wellB_world = halfDist;
+
+  const wellA_cx = worldToCanvasX(wellA_world, totalSpan, W, pad);
+  const wellB_cx = worldToCanvasX(wellB_world, totalSpan, W, pad);
+
+  // Max possible drawdown for scaling
+  const maxS = Math.max(
+    drawdown(p.Q1, p.T, p.R, 0.3) + drawdown(p.Q2, p.T, p.R, 0.3),
+    1
+  );
+  const scale = maxDrawdownPx / maxS;
+
+  function sToY(s) {
+    return waterTableY + s * scale;
+  }
+
+  // ---- Draw ground layers ----
+  // Sky / above ground
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#1a2a3a');
+  skyGrad.addColorStop(1, '#0f1923');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, groundY);
+
+  // Ground surface
+  ctx.fillStyle = '#3d2b1f';
+  ctx.fillRect(0, groundY, W, waterTableY - groundY);
+
+  // Unsaturated zone pattern
+  for (let x = 0; x < W; x += 12) {
+    for (let y = groundY + 8; y < waterTableY; y += 10) {
+      ctx.fillStyle = 'rgba(92, 64, 51, 0.5)';
+      ctx.fillRect(x + (y % 24 === 0 ? 4 : 0), y, 2, 2);
+    }
+  }
+
+  // Aquifer (saturated zone) — full below water table
+  const aquiferGrad = ctx.createLinearGradient(0, waterTableY, 0, aquiferBottom);
+  aquiferGrad.addColorStop(0, 'rgba(0, 119, 182, 0.15)');
+  aquiferGrad.addColorStop(1, 'rgba(0, 119, 182, 0.05)');
+  ctx.fillStyle = aquiferGrad;
+  ctx.fillRect(0, waterTableY, W, aquiferBottom - waterTableY);
+
+  // Aquifer bottom (impermeable layer)
+  ctx.fillStyle = '#2a1f14';
+  ctx.fillRect(0, aquiferBottom, W, H - aquiferBottom);
+  ctx.strokeStyle = '#5c4033';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, aquiferBottom);
+  ctx.lineTo(W, aquiferBottom);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ---- Compute drawdown curves ----
+  const numPoints = Math.floor(W - 2 * pad);
+  const points = [];
+
+  for (let i = 0; i <= numPoints; i++) {
+    const cx = pad + i;
+    const wx = canvasToWorldX(cx, totalSpan, W, pad);
+    const rA = Math.abs(wx - wellA_world);
+    const rB = Math.abs(wx - wellB_world);
+    const sA = drawdown(p.Q1, p.T, p.R, rA);
+    const sB = drawdown(p.Q2, p.T, p.R, rB);
+    points.push({ cx, wx, sA, sB, sTotal: sA + sB });
+  }
+
+  // ---- Draw interference zone shading ----
+  if (p.showInterference) {
+    ctx.beginPath();
+    let inZone = false;
+    for (let i = 0; i <= numPoints; i++) {
+      const pt = points[i];
+      if (pt.sA > 0.001 && pt.sB > 0.001) {
+        const interferenceExtra = Math.min(pt.sA, pt.sB);
+        const y1 = sToY(pt.sTotal - interferenceExtra);
+        const y2 = sToY(pt.sTotal);
+        if (!inZone) {
+          ctx.moveTo(pt.cx, y1);
+          inZone = true;
+        }
+        ctx.lineTo(pt.cx, y1);
+      }
+    }
+    for (let i = numPoints; i >= 0; i--) {
+      const pt = points[i];
+      if (pt.sA > 0.001 && pt.sB > 0.001) {
+        ctx.lineTo(pt.cx, sToY(pt.sTotal));
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255, 107, 107, 0.12)';
+    ctx.fill();
+  }
+
+  // ---- Shading: area between original WT and combined drawdown ----
+  if (p.showCombined) {
+    ctx.beginPath();
+    ctx.moveTo(points[0].cx, waterTableY);
+    for (const pt of points) {
+      ctx.lineTo(pt.cx, sToY(pt.sTotal));
+    }
+    ctx.lineTo(points[numPoints].cx, waterTableY);
+    ctx.closePath();
+    const fillGrad = ctx.createLinearGradient(0, waterTableY, 0, aquiferBottom);
+    fillGrad.addColorStop(0, 'rgba(0, 180, 216, 0.08)');
+    fillGrad.addColorStop(1, 'rgba(0, 119, 182, 0.02)');
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+  }
+
+  // ---- Original water table ----
+  ctx.strokeStyle = '#90e0ef';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 6]);
+  ctx.beginPath();
+  ctx.moveTo(pad, waterTableY);
+  ctx.lineTo(W - pad, waterTableY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Label
+  ctx.fillStyle = '#90e0ef';
+  ctx.font = '500 11px "DM Sans"';
+  ctx.textAlign = 'left';
+  ctx.fillText('Original Water Table', pad + 4, waterTableY - 8);
+
+  // ---- Individual cones ----
+  if (p.showIndividual) {
+    // Well A cone
+    ctx.strokeStyle = '#00b4d8';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (let i = 0; i <= numPoints; i++) {
+      const pt = points[i];
+      const y = sToY(pt.sA);
+      if (i === 0) ctx.moveTo(pt.cx, y);
+      else ctx.lineTo(pt.cx, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Well B cone
+    ctx.strokeStyle = '#e07a5f';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (let i = 0; i <= numPoints; i++) {
+      const pt = points[i];
+      const y = sToY(pt.sB);
+      if (i === 0) ctx.moveTo(pt.cx, y);
+      else ctx.lineTo(pt.cx, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- Combined drawdown ----
+  if (p.showCombined) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(255,255,255,0.2)';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    for (let i = 0; i <= numPoints; i++) {
+      const pt = points[i];
+      const y = sToY(pt.sTotal);
+      if (i === 0) ctx.moveTo(pt.cx, y);
+      else ctx.lineTo(pt.cx, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // ---- Wells ----
+  function drawWell(cx, label, color, Q) {
+    // Well casing
+    ctx.fillStyle = '#4a5568';
+    ctx.fillRect(cx - 3, groundY - 15, 6, aquiferBottom - groundY + 15);
+
+    // Well screen (perforated section)
+    ctx.strokeStyle = '#718096';
+    ctx.lineWidth = 1;
+    for (let y = waterTableY + 20; y < aquiferBottom - 10; y += 8) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, y);
+      ctx.lineTo(cx + 5, y);
+      ctx.stroke();
+    }
+
+    // Well head
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(cx, groundY - 15, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pump arrow if pumping
+    if (Q > 0) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, groundY - 28);
+      ctx.lineTo(cx, groundY - 42);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, groundY - 37);
+      ctx.lineTo(cx, groundY - 42);
+      ctx.lineTo(cx + 5, groundY - 37);
+      ctx.stroke();
+    }
+
+    // Label
+    ctx.fillStyle = color;
+    ctx.font = '600 12px "DM Sans"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, groundY - 48);
+  }
+
+  drawWell(wellA_cx, 'Well A', '#00b4d8', p.Q1);
+  drawWell(wellB_cx, 'Well B', '#e07a5f', p.Q2);
+
+  // ---- Distance annotation ----
+  const annY = groundY - 4;
+  ctx.strokeStyle = 'rgba(200,214,229,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(wellA_cx, annY);
+  ctx.lineTo(wellB_cx, annY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(200,214,229,0.5)';
+  ctx.font = '500 10px "JetBrains Mono"';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${p.dist} m`, (wellA_cx + wellB_cx) / 2, annY - 4);
+
+  // ---- Midpoint marker ----
+  const midCx = (wellA_cx + wellB_cx) / 2;
+  const midSA = drawdown(p.Q1, p.T, p.R, halfDist);
+  const midSB = drawdown(p.Q2, p.T, p.R, halfDist);
+  const midTotal = midSA + midSB;
+  const midY = sToY(midTotal);
+
+  if (p.showCombined) {
+    ctx.beginPath();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(255,107,107,0.5)';
+    ctx.lineWidth = 1;
+    ctx.moveTo(midCx, waterTableY);
+    ctx.lineTo(midCx, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(midCx, midY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.font = '500 10px "JetBrains Mono"';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${midTotal.toFixed(2)} m`, midCx + 8, midY + 4);
+  }
+
+  // ---- Depth scale (Y-axis) ----
+  ctx.fillStyle = var_textMuted;
+  ctx.font = '400 10px "JetBrains Mono"';
+  ctx.textAlign = 'right';
+
+  const maxDrawdownWorld = maxS;
+  const numTicks = 5;
+  for (let i = 0; i <= numTicks; i++) {
+    const s = (maxDrawdownWorld / numTicks) * i;
+    const y = sToY(s);
+    if (y > aquiferBottom - 10) continue;
+
+    ctx.fillStyle = 'rgba(200,214,229,0.3)';
+    ctx.fillRect(pad - 5, y, 5, 1);
+    ctx.fillStyle = 'rgba(200,214,229,0.4)';
+    ctx.fillText(`${s.toFixed(1)}m`, pad - 8, y + 4);
+  }
+
+  ctx.save();
+  ctx.translate(16, (waterTableY + aquiferBottom) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = 'rgba(200,214,229,0.4)';
+  ctx.font = '500 10px "DM Sans"';
+  ctx.textAlign = 'center';
+  ctx.fillText('Drawdown (m)', 0, 0);
+  ctx.restore();
+
+  // Ground surface label
+  ctx.fillStyle = '#5c4033';
+  ctx.font = '500 11px "DM Sans"';
+  ctx.textAlign = 'right';
+  ctx.fillText('Ground Surface', W - pad, groundY - 6);
+
+  ctx.fillStyle = 'rgba(42,31,20,0.8)';
+  ctx.font = '500 10px "DM Sans"';
+  ctx.textAlign = 'right';
+  ctx.fillText('Impermeable Layer', W - pad, aquiferBottom + 14);
+
+  // ---- Update readout ----
+  const interference = midTotal - Math.max(midSA, midSB);
+  document.getElementById('readout').innerHTML =
+    `Drawdown A: <span class="val">${midSA.toFixed(3)} m</span><br>` +
+    `Drawdown B: <span class="val">${midSB.toFixed(3)} m</span><br>` +
+    `Combined: <span class="val">${midTotal.toFixed(3)} m</span><br>` +
+    `Interference: <span class="interference-val">+${interference.toFixed(3)} m</span>`;
+}
+
+// Workaround for CSS variable in JS
+const var_textMuted = '#6b8299';
+
+// Update labels
+function updateLabels() {
+  document.getElementById('q1Val').textContent = parseFloat(document.getElementById('q1').value).toFixed(3) + ' m³/s';
+  document.getElementById('q2Val').textContent = parseFloat(document.getElementById('q2').value).toFixed(3) + ' m³/s';
+  document.getElementById('tVal').textContent = parseFloat(document.getElementById('T').value).toFixed(3) + ' m²/s';
+  document.getElementById('rVal').textContent = parseInt(document.getElementById('R').value) + ' m';
+  document.getElementById('dVal').textContent = parseInt(document.getElementById('dist').value) + ' m';
+}
+
+// Events
+document.querySelectorAll('input').forEach(el => {
+  el.addEventListener('input', () => { updateLabels(); draw(); });
+});
+
+// Tooltip on hover
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const scaleX = (canvas.width / 2) / rect.width;
+
+  const p = getParams();
+  const W = canvas.width / 2;
+  const pad = 60;
+  const totalSpan = Math.max(p.dist + p.R * 2, 800);
+  const halfDist = p.dist / 2;
+
+  const wx = canvasToWorldX(mx * scaleX, totalSpan, W, pad);
+  const rA = Math.abs(wx - (-halfDist));
+  const rB = Math.abs(wx - halfDist);
+  const sA = drawdown(p.Q1, p.T, p.R, rA);
+  const sB = drawdown(p.Q2, p.T, p.R, rB);
+
+  tooltip.innerHTML =
+    `<span style="color:#6b8299">Position:</span> ${wx.toFixed(1)} m<br>` +
+    `<span style="color:#00b4d8">Well A:</span> ${sA.toFixed(3)} m<br>` +
+    `<span style="color:#e07a5f">Well B:</span> ${sB.toFixed(3)} m<br>` +
+    `<span style="color:#fff">Combined:</span> ${(sA + sB).toFixed(3)} m`;
+
+  tooltip.classList.add('visible');
+  tooltip.style.left = Math.min(mx + 16, rect.width - 200) + 'px';
+  tooltip.style.top = (my - 60) + 'px';
+});
+
+canvas.addEventListener('mouseleave', () => {
+  tooltip.classList.remove('visible');
+});
+
+// Init
+window.addEventListener('resize', resize);
+updateLabels();
+resize();
+</script>
+</body>
+</html>
