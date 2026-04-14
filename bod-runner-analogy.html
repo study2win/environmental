@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOD — The Runner's Journey Analogy</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#07090c;--p:#0c1016;--pb:#18222e;--t:#c0cdd8;--tm:#4a6070;--ex:#f97316;--rem:#3b82f6;--ult:#94a3b8;--mark:#eab308;--gn:#22c55e;--rd:#ef4444}
+body{background:var(--bg);color:var(--t);font-family:'Lexend',sans-serif;min-height:100vh}
+.app{max-width:1380px;margin:0 auto;padding:10px 12px}
+.hdr{text-align:center;margin-bottom:8px}
+.hdr h1{font-size:1.3rem;font-weight:800;color:#fff;letter-spacing:-0.03em}
+.hdr .s{font-family:'Fira Code',monospace;font-size:0.68rem;color:var(--tm);margin-top:2px}
+.lay{display:grid;grid-template-columns:235px 1fr;gap:10px;align-items:start}
+@media(max-width:900px){.lay{grid-template-columns:1fr}}
+.pnl{background:var(--p);border:1px solid var(--pb);border-radius:10px}
+.ctrl{padding:12px;display:flex;flex-direction:column;gap:12px}
+.cs{display:flex;flex-direction:column;gap:6px}
+.ct{font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--tm);padding-bottom:3px;border-bottom:1px solid var(--pb)}
+.cr{display:flex;flex-direction:column;gap:2px}
+.cl{display:flex;justify-content:space-between;font-size:0.74rem}
+.cv{font-family:'Fira Code',monospace;font-size:0.66rem;color:#06b6d4;font-weight:500}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:#18222e;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#06b6d4;cursor:pointer}
+.br{display:flex;gap:5px}
+.btn{flex:1;padding:7px 4px;border:1px solid var(--pb);border-radius:5px;background:rgba(0,0,0,.3);color:var(--t);font-family:'Lexend',sans-serif;font-size:0.72rem;font-weight:600;cursor:pointer;transition:.15s;text-align:center}
+.btn:hover{background:rgba(6,182,212,.1);border-color:#06b6d4;color:#fff}
+.btn.on{background:rgba(6,182,212,.15);border-color:#06b6d4;color:#06b6d4}
+.cb{background:rgba(0,0,0,.35);border-radius:7px;padding:10px;font-family:'Fira Code',monospace;font-size:0.63rem;line-height:1.75;color:var(--tm);white-space:pre-wrap}
+.cb .ex{color:var(--ex);font-weight:600}
+.cb .rm{color:var(--rem);font-weight:600}
+.cb .w{color:#fff;font-weight:600}
+.cb .mk{color:var(--mark);font-weight:600}
+.live-nums{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.ln-box{background:rgba(0,0,0,.3);border-radius:6px;padding:8px;text-align:center}
+.ln-box .ln-label{font-size:0.58rem;color:var(--tm);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px}
+.ln-box .ln-val{font-family:'Fira Code',monospace;font-size:0.9rem;font-weight:600}
+.insight{padding:9px;border-radius:7px;border:1px solid rgba(234,179,8,.18);background:rgba(234,179,8,.03);font-size:0.68rem;line-height:1.45;color:var(--mark)}
+.insight strong{color:#fff}
+canvas{display:block;width:100%}
+.cvs-area{display:flex;flex-direction:column;gap:8px}
+.r-box{overflow:hidden}
+.r-hdr{padding:7px 12px;background:rgba(0,0,0,.2);border-bottom:1px solid var(--pb);display:flex;justify-content:space-between;align-items:center}
+.r-hdr h3{font-size:0.76rem;font-weight:700;color:#fff}
+.r-hdr .eq{font-family:'Fira Code',monospace;font-size:0.6rem;color:var(--tm)}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="hdr">
+<h1>BOD — The Runner's Journey</h1>
+<div class="s">Distance Covered = BOD Exerted | Distance Remaining = BOD Remaining | Track = Ultimate BOD (L₀)</div>
+</div>
+<div class="lay">
+<!-- Controls -->
+<div class="pnl ctrl">
+<div class="cs">
+<div class="ct">BOD Parameters</div>
+<div class="cr"><div class="cl">Ultimate BOD (L₀) <span class="cv" id="l0V">200 mg/L</span></div>
+<input type="range" id="l0S" min="50" max="500" step="10" value="200"></div>
+<div class="cr"><div class="cl">Rate Constant (k₂₀) <span class="cv" id="kV">0.23 /day</span></div>
+<input type="range" id="kS" min="0.05" max="0.8" step="0.01" value="0.23"></div>
+<div class="cr"><div class="cl">Temperature <span class="cv" id="tV">20 °C</span></div>
+<input type="range" id="tS" min="5" max="40" step="1" value="20"></div>
+</div>
+
+<div class="cs">
+<div class="ct">Animation</div>
+<div class="br">
+<button class="btn on" id="btnPlay" onclick="togglePlay()">▶ Play</button>
+<button class="btn" onclick="resetAnim()">↺ Reset</button>
+</div>
+<div class="cr"><div class="cl">Speed <span class="cv" id="spV">1.0×</span></div>
+<input type="range" id="spS" min="0.3" max="4" step="0.1" value="1"></div>
+</div>
+
+<div class="cs">
+<div class="ct">Current Status</div>
+<div class="live-nums">
+<div class="ln-box"><div class="ln-label">Day</div><div class="ln-val" id="dayVal" style="color:#fff">0.0</div></div>
+<div class="ln-box"><div class="ln-label">% Done</div><div class="ln-val" id="pctVal" style="color:var(--gn)">0%</div></div>
+<div class="ln-box"><div class="ln-label">BOD Exerted</div><div class="ln-val" id="exVal" style="color:var(--ex)">0</div></div>
+<div class="ln-box"><div class="ln-label">BOD Remaining</div><div class="ln-val" id="remVal" style="color:var(--rem)">200</div></div>
+</div>
+</div>
+
+<div class="cs">
+<div class="ct">Calculations</div>
+<div class="cb" id="calcBox"></div>
+</div>
+
+<div class="cs">
+<div class="ct">Key Insight</div>
+<div class="insight" id="insightBox"></div>
+</div>
+</div>
+
+<!-- Canvases -->
+<div class="cvs-area">
+<div class="pnl r-box">
+<div class="r-hdr">
+<h3>🏃 The Runner on the Track</h3>
+<div class="eq">Distance Covered + Distance Remaining = Track Length (L₀)</div>
+</div>
+<canvas id="cTrack" height="200"></canvas>
+</div>
+<div class="pnl r-box">
+<div class="r-hdr">
+<h3>📈 BOD Curves (Twin Curves)</h3>
+<div class="eq">Exerted: L₀(1-e<sup>-kt</sup>) | Remaining: L₀·e<sup>-kt</sup></div>
+</div>
+<canvas id="cCurve" height="260"></canvas>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+var cTrack = document.getElementById('cTrack');
+var cCurve = document.getElementById('cCurve');
+var ctxT = cTrack.getContext('2d');
+var ctxC = cCurve.getContext('2d');
+
+var currentDay = 0;
+var maxDay = 20;
+var playing = false;
+var lastTime = 0;
+
+function gp(){
+  var k20 = +document.getElementById('kS').value;
+  var T = +document.getElementById('tS').value;
+  var kT = k20 * Math.pow(1.047, T - 20);
+  return {
+    L0: +document.getElementById('l0S').value,
+    k20: k20,
+    T: T,
+    k: kT,
+    sp: +document.getElementById('spS').value,
+  };
+}
+
+function bodExerted(L0, k, t){ return L0 * (1 - Math.exp(-k * t)); }
+function bodRemaining(L0, k, t){ return L0 * Math.exp(-k * t); }
+
+// === RESIZE ===
+function resizeCv(cv, h){
+  var w = cv.parentElement.clientWidth;
+  cv.width = w * 2;
+  cv.height = h * 2;
+  cv.style.height = h + 'px';
+  cv.getContext('2d').setTransform(2,0,0,2,0,0);
+}
+function resizeAll(){
+  resizeCv(cTrack, 200);
+  resizeCv(cCurve, 260);
+  drawAll();
+}
+
+// === DRAW TRACK ===
+function drawTrack(){
+  var p = gp();
+  var W = cTrack.width/2;
+  var H = cTrack.height/2;
+  ctxT.clearRect(0,0,W,H);
+
+  var pad = {l:30, r:30, t:35, b:50};
+  var trackX = pad.l;
+  var trackW = W - pad.l - pad.r;
+  var trackY = 65;
+  var trackH = 40;
+
+  var frac = bodExerted(p.L0, p.k, currentDay) / p.L0;
+  var runnerX = trackX + frac * trackW;
+
+  // Track background
+  ctxT.fillStyle = '#111820';
+  drawRoundRect(ctxT, trackX, trackY, trackW, trackH, 6);
+  ctxT.fill();
+
+  // BOD Exerted (covered distance) — orange
+  if(frac > 0.005){
+    ctxT.fillStyle = 'rgba(249,115,22,0.35)';
+    drawRoundRect(ctxT, trackX, trackY, frac*trackW, trackH, 6);
+    ctxT.fill();
+
+    // Gradient overlay
+    var grd = ctxT.createLinearGradient(trackX, 0, runnerX, 0);
+    grd.addColorStop(0, 'rgba(249,115,22,0.15)');
+    grd.addColorStop(1, 'rgba(249,115,22,0.5)');
+    ctxT.fillStyle = grd;
+    drawRoundRect(ctxT, trackX, trackY, frac*trackW, trackH, 6);
+    ctxT.fill();
+  }
+
+  // BOD Remaining (ahead) — blue tint
+  if(frac < 0.995){
+    ctxT.fillStyle = 'rgba(59,130,246,0.12)';
+    ctxT.fillRect(runnerX, trackY, (1-frac)*trackW, trackH);
+  }
+
+  // Track outline
+  ctxT.strokeStyle = '#2a3a4a';
+  ctxT.lineWidth = 1.5;
+  drawRoundRect(ctxT, trackX, trackY, trackW, trackH, 6);
+  ctxT.stroke();
+
+  // START label
+  ctxT.fillStyle = '#22c55e';
+  ctxT.font = '700 10px Lexend';
+  ctxT.textAlign = 'center';
+  ctxT.fillText('START', trackX, trackY - 8);
+  ctxT.fillStyle = '#4a6070';
+  ctxT.font = '400 8px Fira Code';
+  ctxT.fillText('Day 0', trackX, trackY - 20);
+
+  // FINISH label
+  ctxT.fillStyle = '#ef4444';
+  ctxT.font = '700 10px Lexend';
+  ctxT.fillText('FINISH', trackX + trackW, trackY - 8);
+  ctxT.fillStyle = '#4a6070';
+  ctxT.font = '400 8px Fira Code';
+  ctxT.fillText('L₀ = '+p.L0, trackX + trackW, trackY - 20);
+
+  // Day 5 marker
+  var frac5 = bodExerted(p.L0, p.k, 5) / p.L0;
+  var day5X = trackX + frac5 * trackW;
+  ctxT.strokeStyle = 'rgba(234,179,8,0.6)';
+  ctxT.lineWidth = 1.5;
+  ctxT.setLineDash([4,3]);
+  ctxT.beginPath();
+  ctxT.moveTo(day5X, trackY - 4);
+  ctxT.lineTo(day5X, trackY + trackH + 4);
+  ctxT.stroke();
+  ctxT.setLineDash([]);
+  ctxT.fillStyle = '#eab308';
+  ctxT.font = '600 8px Fira Code';
+  ctxT.fillText('Day 5', day5X, trackY + trackH + 16);
+  ctxT.fillText('BOD₅', day5X, trackY + trackH + 28);
+
+  // Runner
+  var runnerSize = 14;
+  // Runner body (stick figure simplified as circle + triangle)
+  // Shadow/glow
+  var glowGrd = ctxT.createRadialGradient(runnerX, trackY + trackH/2, 0, runnerX, trackY + trackH/2, 25);
+  glowGrd.addColorStop(0, 'rgba(249,115,22,0.3)');
+  glowGrd.addColorStop(1, 'rgba(249,115,22,0)');
+  ctxT.fillStyle = glowGrd;
+  ctxT.fillRect(runnerX-25, trackY-5, 50, trackH+10);
+
+  // Runner circle (head)
+  ctxT.fillStyle = '#fff';
+  ctxT.beginPath();
+  ctxT.arc(runnerX, trackY + trackH/2 - 8, 6, 0, Math.PI*2);
+  ctxT.fill();
+
+  // Runner body
+  ctxT.strokeStyle = '#fff';
+  ctxT.lineWidth = 2;
+  ctxT.beginPath();
+  ctxT.moveTo(runnerX, trackY + trackH/2 - 2);
+  ctxT.lineTo(runnerX, trackY + trackH/2 + 10);
+  ctxT.stroke();
+
+  // Legs (animated)
+  var legAngle = (currentDay * 8) % (Math.PI * 2);
+  var legSpread = Math.max(2, 6 * (1 - frac)); // legs slow down as runner slows
+  ctxT.beginPath();
+  ctxT.moveTo(runnerX, trackY + trackH/2 + 10);
+  ctxT.lineTo(runnerX + Math.sin(legAngle)*legSpread, trackY + trackH/2 + 18);
+  ctxT.stroke();
+  ctxT.beginPath();
+  ctxT.moveTo(runnerX, trackY + trackH/2 + 10);
+  ctxT.lineTo(runnerX - Math.sin(legAngle)*legSpread, trackY + trackH/2 + 18);
+  ctxT.stroke();
+
+  // Arms
+  ctxT.beginPath();
+  ctxT.moveTo(runnerX, trackY + trackH/2 + 2);
+  ctxT.lineTo(runnerX + Math.cos(legAngle)*5, trackY + trackH/2 - 2);
+  ctxT.stroke();
+  ctxT.beginPath();
+  ctxT.moveTo(runnerX, trackY + trackH/2 + 2);
+  ctxT.lineTo(runnerX - Math.cos(legAngle)*5, trackY + trackH/2 - 2);
+  ctxT.stroke();
+
+  // Speed indicator text
+  var speed = p.k * bodRemaining(p.L0, p.k, currentDay);
+  ctxT.fillStyle = 'rgba(255,255,255,0.5)';
+  ctxT.font = '500 8px Fira Code';
+  ctxT.textAlign = 'center';
+  if(currentDay < 1){
+    ctxT.fillText('Sprinting! (high organic matter → fast reaction)', W/2, trackY + trackH + 42);
+  } else if(frac < 0.7){
+    ctxT.fillText('Slowing down... (less organic matter → slower reaction)', W/2, trackY + trackH + 42);
+  } else if(frac < 0.95){
+    ctxT.fillText('Jogging... almost there (very little organic matter left)', W/2, trackY + trackH + 42);
+  } else {
+    ctxT.fillText('Crawling... approaching L₀ but never quite reaching it!', W/2, trackY + trackH + 42);
+  }
+
+  // Labels on track
+  if(frac > 0.08){
+    ctxT.fillStyle = 'rgba(249,115,22,0.8)';
+    ctxT.font = '600 9px Lexend';
+    ctxT.textAlign = 'center';
+    var exLabelX = trackX + frac*trackW/2;
+    if(frac > 0.2) ctxT.fillText('BOD Exerted', exLabelX, trackY + trackH/2 + 4);
+  }
+  if(frac < 0.85){
+    ctxT.fillStyle = 'rgba(59,130,246,0.6)';
+    ctxT.font = '600 9px Lexend';
+    var remLabelX = runnerX + (1-frac)*trackW/2;
+    if((1-frac) > 0.2) ctxT.fillText('BOD Remaining', remLabelX, trackY + trackH/2 + 4);
+  }
+
+  // Day counter top right
+  ctxT.fillStyle = '#fff';
+  ctxT.font = '800 18px Lexend';
+  ctxT.textAlign = 'right';
+  ctxT.fillText('Day ' + currentDay.toFixed(1), W - pad.r, 22);
+}
+
+// === DRAW CURVES ===
+function drawCurves(){
+  var p = gp();
+  var W = cCurve.width/2;
+  var H = cCurve.height/2;
+  ctxC.clearRect(0,0,W,H);
+
+  var pad = {l:55, r:25, t:20, b:40};
+  var pW = W - pad.l - pad.r;
+  var pH = H - pad.t - pad.b;
+
+  // Axes
+  ctxC.strokeStyle = '#18222e';
+  ctxC.lineWidth = 1;
+  ctxC.beginPath();
+  ctxC.moveTo(pad.l, pad.t);
+  ctxC.lineTo(pad.l, pad.t + pH);
+  ctxC.lineTo(pad.l + pW, pad.t + pH);
+  ctxC.stroke();
+
+  // Y axis labels
+  ctxC.fillStyle = '#4a6070';
+  ctxC.font = '400 8px Fira Code';
+  ctxC.textAlign = 'right';
+  for(var i=0; i<=4; i++){
+    var val = p.L0 * (1 - i/4);
+    var yy = pad.t + (i/4) * pH;
+    ctxC.fillText(val.toFixed(0), pad.l - 5, yy + 3);
+    if(i > 0 && i < 4){
+      ctxC.strokeStyle = '#111820';
+      ctxC.beginPath();
+      ctxC.moveTo(pad.l, yy);
+      ctxC.lineTo(pad.l+pW, yy);
+      ctxC.stroke();
+    }
+  }
+  ctxC.save();
+  ctxC.translate(12, pad.t + pH/2);
+  ctxC.rotate(-Math.PI/2);
+  ctxC.fillStyle = '#4a6070';
+  ctxC.font = '500 9px Lexend';
+  ctxC.textAlign = 'center';
+  ctxC.fillText('Concentration (mg/L)', 0, 0);
+  ctxC.restore();
+
+  // X axis labels
+  ctxC.fillStyle = '#4a6070';
+  ctxC.font = '400 8px Fira Code';
+  ctxC.textAlign = 'center';
+  for(var d=0; d<=maxDay; d+=5){
+    var xx = pad.l + (d/maxDay)*pW;
+    ctxC.fillText(d, xx, pad.t + pH + 14);
+    ctxC.strokeStyle = '#111820';
+    ctxC.beginPath();
+    ctxC.moveTo(xx, pad.t);
+    ctxC.lineTo(xx, pad.t + pH);
+    ctxC.stroke();
+  }
+  ctxC.fillText('Days →', pad.l + pW/2, pad.t + pH + 30);
+
+  // L₀ line
+  ctxC.strokeStyle = 'rgba(148,163,184,0.3)';
+  ctxC.lineWidth = 1;
+  ctxC.setLineDash([6,4]);
+  ctxC.beginPath();
+  ctxC.moveTo(pad.l, pad.t);
+  ctxC.lineTo(pad.l + pW, pad.t);
+  ctxC.stroke();
+  ctxC.setLineDash([]);
+  ctxC.fillStyle = '#94a3b8';
+  ctxC.font = '500 9px Fira Code';
+  ctxC.textAlign = 'left';
+  ctxC.fillText('L₀ = '+p.L0, pad.l + pW + 3, pad.t + 4);
+
+  // Full BOD Exerted curve (faded, full extent)
+  ctxC.strokeStyle = 'rgba(249,115,22,0.15)';
+  ctxC.lineWidth = 1;
+  ctxC.beginPath();
+  for(var i=0; i<=200; i++){
+    var t = (i/200) * maxDay;
+    var ex = bodExerted(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - ex/p.L0)*pH;
+    if(i===0) ctxC.moveTo(xx, yy); else ctxC.lineTo(xx, yy);
+  }
+  ctxC.stroke();
+
+  // Full BOD Remaining curve (faded)
+  ctxC.strokeStyle = 'rgba(59,130,246,0.15)';
+  ctxC.beginPath();
+  for(var i=0; i<=200; i++){
+    var t = (i/200) * maxDay;
+    var rem = bodRemaining(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - rem/p.L0)*pH;
+    if(i===0) ctxC.moveTo(xx, yy); else ctxC.lineTo(xx, yy);
+  }
+  ctxC.stroke();
+
+  // Animated BOD Exerted curve (up to current day)
+  // Fill under curve
+  ctxC.beginPath();
+  ctxC.moveTo(pad.l, pad.t + pH); // bottom left
+  for(var i=0; i<=100; i++){
+    var t = (i/100) * Math.min(currentDay, maxDay);
+    var ex = bodExerted(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - ex/p.L0)*pH;
+    ctxC.lineTo(xx, yy);
+  }
+  var lastXX = pad.l + (Math.min(currentDay,maxDay)/maxDay)*pW;
+  ctxC.lineTo(lastXX, pad.t + pH);
+  ctxC.closePath();
+  ctxC.fillStyle = 'rgba(249,115,22,0.08)';
+  ctxC.fill();
+
+  // BOD Exerted line
+  ctxC.strokeStyle = '#f97316';
+  ctxC.lineWidth = 2.5;
+  ctxC.beginPath();
+  for(var i=0; i<=100; i++){
+    var t = (i/100) * Math.min(currentDay, maxDay);
+    var ex = bodExerted(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - ex/p.L0)*pH;
+    if(i===0) ctxC.moveTo(xx, yy); else ctxC.lineTo(xx, yy);
+  }
+  ctxC.stroke();
+
+  // BOD Remaining fill
+  ctxC.beginPath();
+  ctxC.moveTo(pad.l, pad.t); // top left
+  for(var i=0; i<=100; i++){
+    var t = (i/100) * Math.min(currentDay, maxDay);
+    var rem = bodRemaining(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - rem/p.L0)*pH;
+    ctxC.lineTo(xx, yy);
+  }
+  ctxC.lineTo(lastXX, pad.t);
+  ctxC.closePath();
+  ctxC.fillStyle = 'rgba(59,130,246,0.06)';
+  ctxC.fill();
+
+  // BOD Remaining line
+  ctxC.strokeStyle = '#3b82f6';
+  ctxC.lineWidth = 2.5;
+  ctxC.beginPath();
+  for(var i=0; i<=100; i++){
+    var t = (i/100) * Math.min(currentDay, maxDay);
+    var rem = bodRemaining(p.L0, p.k, t);
+    var xx = pad.l + (t/maxDay)*pW;
+    var yy = pad.t + (1 - rem/p.L0)*pH;
+    if(i===0) ctxC.moveTo(xx, yy); else ctxC.lineTo(xx, yy);
+  }
+  ctxC.stroke();
+
+  // Current day vertical marker
+  if(currentDay > 0 && currentDay <= maxDay){
+    var cdX = pad.l + (currentDay/maxDay)*pW;
+    ctxC.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctxC.lineWidth = 1;
+    ctxC.setLineDash([3,3]);
+    ctxC.beginPath();
+    ctxC.moveTo(cdX, pad.t);
+    ctxC.lineTo(cdX, pad.t + pH);
+    ctxC.stroke();
+    ctxC.setLineDash([]);
+
+    // Dots on curves
+    var exNow = bodExerted(p.L0, p.k, currentDay);
+    var remNow = bodRemaining(p.L0, p.k, currentDay);
+    var exY = pad.t + (1 - exNow/p.L0)*pH;
+    var remY = pad.t + (1 - remNow/p.L0)*pH;
+
+    // Exerted dot
+    ctxC.fillStyle = '#f97316';
+    ctxC.beginPath();
+    ctxC.arc(cdX, exY, 5, 0, Math.PI*2);
+    ctxC.fill();
+    ctxC.strokeStyle = '#fff';
+    ctxC.lineWidth = 1.5;
+    ctxC.stroke();
+
+    // Remaining dot
+    ctxC.fillStyle = '#3b82f6';
+    ctxC.beginPath();
+    ctxC.arc(cdX, remY, 5, 0, Math.PI*2);
+    ctxC.fill();
+    ctxC.strokeStyle = '#fff';
+    ctxC.lineWidth = 1.5;
+    ctxC.stroke();
+
+    // Vertical bracket showing they add up to L₀
+    ctxC.strokeStyle = 'rgba(148,163,184,0.3)';
+    ctxC.lineWidth = 1;
+    ctxC.beginPath();
+    ctxC.moveTo(cdX + 10, exY);
+    ctxC.lineTo(cdX + 16, exY);
+    ctxC.lineTo(cdX + 16, remY);
+    ctxC.lineTo(cdX + 10, remY);
+    ctxC.stroke();
+    ctxC.fillStyle = 'rgba(148,163,184,0.5)';
+    ctxC.font = '400 7px Fira Code';
+    ctxC.textAlign = 'left';
+    ctxC.fillText('= L₀', cdX + 19, (exY+remY)/2 + 3);
+  }
+
+  // Day 5 marker
+  var day5X = pad.l + (5/maxDay)*pW;
+  ctxC.strokeStyle = 'rgba(234,179,8,0.4)';
+  ctxC.lineWidth = 1.5;
+  ctxC.setLineDash([5,3]);
+  ctxC.beginPath();
+  ctxC.moveTo(day5X, pad.t);
+  ctxC.lineTo(day5X, pad.t + pH);
+  ctxC.stroke();
+  ctxC.setLineDash([]);
+
+  var bod5 = bodExerted(p.L0, p.k, 5);
+  var bod5Y = pad.t + (1 - bod5/p.L0)*pH;
+  ctxC.fillStyle = '#eab308';
+  ctxC.beginPath();
+  ctxC.arc(day5X, bod5Y, 4, 0, Math.PI*2);
+  ctxC.fill();
+  ctxC.font = '600 9px Fira Code';
+  ctxC.textAlign = 'left';
+  ctxC.fillText('BOD₅ = '+bod5.toFixed(1), day5X + 8, bod5Y - 6);
+  ctxC.fillStyle = 'rgba(234,179,8,0.5)';
+  ctxC.font = '400 8px Fira Code';
+  ctxC.fillText('('+(bod5/p.L0*100).toFixed(0)+'% of L₀)', day5X + 8, bod5Y + 8);
+
+  // Legend
+  var lgY = pad.t + 8;
+  var lgX = pad.l + pW - 130;
+  // Exerted
+  ctxC.fillStyle = '#f97316';
+  ctxC.beginPath();
+  ctxC.arc(lgX, lgY, 4, 0, Math.PI*2);
+  ctxC.fill();
+  ctxC.fillStyle = '#f97316';
+  ctxC.font = '500 9px Lexend';
+  ctxC.textAlign = 'left';
+  ctxC.fillText('BOD Exerted (rising)', lgX + 8, lgY + 3);
+  // Remaining
+  ctxC.fillStyle = '#3b82f6';
+  ctxC.beginPath();
+  ctxC.arc(lgX, lgY + 16, 4, 0, Math.PI*2);
+  ctxC.fill();
+  ctxC.fillStyle = '#3b82f6';
+  ctxC.fillText('BOD Remaining (falling)', lgX + 8, lgY + 19);
+}
+
+// Rounded rect helper
+function drawRoundRect(ctx, x, y, w, h, r){
+  if(w<0){x+=w;w=-w}
+  if(h<0){y+=h;h=-h}
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// === UPDATE UI ===
+function updateUI(){
+  var p = gp();
+  var exNow = bodExerted(p.L0, p.k, currentDay);
+  var remNow = bodRemaining(p.L0, p.k, currentDay);
+  var pct = (exNow/p.L0*100);
+  var bod5 = bodExerted(p.L0, p.k, 5);
+
+  document.getElementById('dayVal').textContent = currentDay.toFixed(1);
+  document.getElementById('exVal').textContent = exNow.toFixed(1);
+  document.getElementById('remVal').textContent = remNow.toFixed(1);
+  document.getElementById('pctVal').textContent = pct.toFixed(0) + '%';
+
+  // Calc box
+  var kCorr = p.k20 !== p.k ? '\nk_T = k₂₀ × 1.047^(T-20)\n    = '+p.k20+' × 1.047^('+(p.T-20)+')\n    = <span class="w">'+p.k.toFixed(4)+' /day</span>\n' : '';
+  document.getElementById('calcBox').innerHTML =
+    '<span class="w">At Day '+currentDay.toFixed(1)+':</span>\n' +
+    kCorr + '\n' +
+    '<span class="ex">Exerted</span> = L₀(1-e^(-kt))\n' +
+    '  = '+p.L0+'(1-e^(-'+p.k.toFixed(3)+'×'+currentDay.toFixed(1)+'))\n' +
+    '  = <span class="ex">'+exNow.toFixed(2)+' mg/L</span>\n\n' +
+    '<span class="rm">Remaining</span> = L₀·e^(-kt)\n' +
+    '  = '+p.L0+'·e^(-'+p.k.toFixed(3)+'×'+currentDay.toFixed(1)+')\n' +
+    '  = <span class="rm">'+remNow.toFixed(2)+' mg/L</span>\n\n' +
+    'Check: '+exNow.toFixed(1)+' + '+remNow.toFixed(1)+' = <span class="w">'+(exNow+remNow).toFixed(1)+' = L₀ ✓</span>\n\n' +
+    '<span class="mk">BOD₅ = '+bod5.toFixed(1)+' mg/L ('+(bod5/p.L0*100).toFixed(0)+'% of L₀)</span>';
+
+  // Insight
+  var bod5pct = (bod5/p.L0*100).toFixed(0);
+  document.getElementById('insightBox').innerHTML =
+    'At this rate (k='+p.k.toFixed(3)+'/day), the runner covers <strong>'+bod5pct+'%</strong> of the track by Day 5.' +
+    '<br><br>' +
+    (p.k < 0.15 ?
+      'With a slow runner (low k), BOD₅ captures <strong>very little</strong> of the ultimate BOD. Most organic matter is still unreacted!' :
+      p.k > 0.4 ?
+      'With a fast runner (high k), BOD₅ captures <strong>most</strong> of the ultimate BOD. The reaction is nearly complete by Day 5.' :
+      'Typical municipal wastewater has k ≈ 0.23/day. BOD₅ captures about <strong>68%</strong> of ultimate BOD at this rate.') +
+    (p.T !== 20 ?
+      '<br><br>At <strong>'+p.T+'°C</strong>, k is '+(p.k > p.k20 ? 'higher' : 'lower')+' than at 20°C → runner is '+(p.k > p.k20 ? 'faster' : 'slower')+'.' : '');
+}
+
+function updateLabels(){
+  document.getElementById('l0V').textContent = document.getElementById('l0S').value + ' mg/L';
+  document.getElementById('kV').textContent = (+document.getElementById('kS').value).toFixed(2) + ' /day';
+  document.getElementById('tV').textContent = document.getElementById('tS').value + ' °C';
+  document.getElementById('spV').textContent = (+document.getElementById('spS').value).toFixed(1) + '×';
+}
+
+// === ANIMATION ===
+function togglePlay(){
+  playing = !playing;
+  document.getElementById('btnPlay').textContent = playing ? '⏸ Pause' : '▶ Play';
+  document.getElementById('btnPlay').classList.toggle('on', playing);
+  if(playing && currentDay >= maxDay) currentDay = 0;
+  if(playing) lastTime = 0;
+}
+
+function resetAnim(){
+  playing = false;
+  currentDay = 0;
+  document.getElementById('btnPlay').textContent = '▶ Play';
+  document.getElementById('btnPlay').classList.add('on');
+  drawAll();
+  updateUI();
+}
+
+function drawAll(){
+  drawTrack();
+  drawCurves();
+}
+
+// Events
+var sliders = document.querySelectorAll('input[type=range]');
+for(var i=0;i<sliders.length;i++){
+  sliders[i].addEventListener('input', function(){
+    updateLabels();
+    drawAll();
+    updateUI();
+  });
+}
+
+// Main loop
+function animate(t){
+  requestAnimationFrame(animate);
+  if(playing){
+    if(lastTime === 0) lastTime = t;
+    var dt = Math.min((t - lastTime)/1000, 0.05);
+    lastTime = t;
+    var sp = +document.getElementById('spS').value;
+    currentDay += dt * sp * 1.5; // ~1.5 days per real second at 1x speed
+    if(currentDay >= maxDay){
+      currentDay = maxDay;
+      playing = false;
+      document.getElementById('btnPlay').textContent = '▶ Play';
+      document.getElementById('btnPlay').classList.add('on');
+    }
+  } else {
+    lastTime = 0;
+  }
+  drawAll();
+  updateUI();
+}
+
+// Init
+window.addEventListener('resize', resizeAll);
+resizeAll();
+updateLabels();
+updateUI();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
