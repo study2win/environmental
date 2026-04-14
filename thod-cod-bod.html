@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThOD vs COD vs BOD — Interactive Compound Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#060910;--p:#0b0f16;--pb:#161e2c;--t:#bcc8d4;--tm:#4a5e70;--thod:#a78bfa;--cod:#f59e0b;--bod:#10b981;--rd:#ef4444;--cy:#06b6d4}
+body{background:var(--bg);color:var(--t);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:10px 12px}
+.hdr{text-align:center;margin-bottom:10px}
+.hdr h1{font-size:1.3rem;font-weight:800;color:#fff;letter-spacing:-0.03em}
+.hdr .s{font-family:'Fira Code',monospace;font-size:0.68rem;color:var(--tm);margin-top:2px}
+.lay{display:grid;grid-template-columns:270px 1fr;gap:10px;align-items:start}
+@media(max-width:960px){.lay{grid-template-columns:1fr}}
+.pnl{background:var(--p);border:1px solid var(--pb);border-radius:10px}
+.ctrl{padding:12px;display:flex;flex-direction:column;gap:11px}
+.cs{display:flex;flex-direction:column;gap:5px}
+.ct{font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--tm);padding-bottom:3px;border-bottom:1px solid var(--pb)}
+
+/* Compound selector cards */
+.cat-label{font-size:0.66rem;font-weight:700;margin-top:2px;padding:3px 6px;border-radius:4px;display:inline-block}
+.cat-1{color:var(--bod);background:rgba(16,185,129,.08)}
+.cat-2{color:var(--cod);background:rgba(245,158,11,.08)}
+.cat-3{color:var(--rd);background:rgba(239,68,68,.08)}
+
+.cmp-list{display:flex;flex-direction:column;gap:4px}
+.cmp-card{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent;transition:.15s;font-size:0.72rem}
+.cmp-card:hover{background:rgba(255,255,255,.02);border-color:var(--pb)}
+.cmp-card.active{border-color:var(--cy);background:rgba(6,182,212,.05)}
+.cmp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cmp-name{font-weight:600;color:#fff;font-size:0.72rem}
+.cmp-formula{font-family:'Fira Code',monospace;font-size:0.62rem;color:var(--tm)}
+
+/* Custom input */
+.custom-input{display:flex;flex-direction:column;gap:4px}
+.custom-row{display:flex;gap:4px}
+.custom-row input{flex:1;padding:6px 8px;border:1px solid var(--pb);border-radius:5px;background:rgba(0,0,0,.3);color:#fff;font-family:'Fira Code',monospace;font-size:0.72rem;outline:none}
+.custom-row input:focus{border-color:var(--cy)}
+.custom-row input::placeholder{color:var(--tm)}
+.cbtn{padding:6px 12px;border:1px solid var(--cy);border-radius:5px;background:rgba(6,182,212,.1);color:var(--cy);font-family:'Plus Jakarta Sans',sans-serif;font-size:0.72rem;font-weight:600;cursor:pointer}
+.cbtn:hover{background:rgba(6,182,212,.2)}
+.chk-row{display:flex;gap:10px;font-size:0.68rem;color:var(--tm)}
+.chk-row label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.chk-row input[type=checkbox]{accent-color:var(--cy)}
+
+/* Calc box */
+.cb{background:rgba(0,0,0,.35);border-radius:7px;padding:10px;font-family:'Fira Code',monospace;font-size:0.6rem;line-height:1.8;color:var(--tm);white-space:pre-wrap}
+.cb .th{color:var(--thod);font-weight:600}
+.cb .co{color:var(--cod);font-weight:600}
+.cb .bo{color:var(--bod);font-weight:600}
+.cb .w{color:#fff;font-weight:600}
+
+.insight{padding:9px;border-radius:7px;border:1px solid rgba(167,139,250,.18);background:rgba(167,139,250,.03);font-size:0.68rem;line-height:1.45;color:var(--thod)}
+.insight strong{color:#fff}
+
+/* Right area */
+.right{display:flex;flex-direction:column;gap:8px}
+.r-box{overflow:hidden}
+.r-hdr{padding:7px 12px;background:rgba(0,0,0,.2);border-bottom:1px solid var(--pb);display:flex;justify-content:space-between;align-items:center}
+.r-hdr h3{font-size:0.76rem;font-weight:700;color:#fff}
+.r-hdr .eq{font-family:'Fira Code',monospace;font-size:0.6rem;color:var(--tm)}
+canvas{display:block;width:100%}
+
+/* Comparison table */
+.cmp-table{width:100%;border-collapse:collapse;font-size:0.68rem}
+.cmp-table th{text-align:left;padding:6px 8px;color:var(--tm);font-weight:600;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--pb)}
+.cmp-table td{padding:5px 8px;border-bottom:1px solid rgba(22,30,44,.5)}
+.cmp-table .v-thod{color:var(--thod);font-family:'Fira Code',monospace;font-weight:500}
+.cmp-table .v-cod{color:var(--cod);font-family:'Fira Code',monospace;font-weight:500}
+.cmp-table .v-bod{color:var(--bod);font-family:'Fira Code',monospace;font-weight:500}
+.cmp-table .cname{color:#fff;font-weight:600}
+.tbl-wrap{padding:10px;max-height:180px;overflow-y:auto}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="hdr">
+<h1>ThOD vs COD vs BOD — It Depends on the Compound!</h1>
+<div class="s">BOD ≤ COD ≤ ThOD — but why? Select a compound and see.</div>
+</div>
+<div class="lay">
+<!-- Left: Controls -->
+<div class="pnl ctrl">
+<div class="cs">
+<div class="ct">Category 1 — Fully Biodegradable</div>
+<div class="cat-label cat-1">ThOD = COD = BOD</div>
+<div class="cmp-list" id="cat1List"></div>
+</div>
+<div class="cs">
+<div class="ct">Category 2 — Non-Biodegradable, Oxidizable</div>
+<div class="cat-label cat-2">ThOD = COD > BOD ≈ 0</div>
+<div class="cmp-list" id="cat2List"></div>
+</div>
+<div class="cs">
+<div class="ct">Category 3 — Refractory (PAHs)</div>
+<div class="cat-label cat-3">ThOD > COD ≈ 0, BOD = 0</div>
+<div class="cmp-list" id="cat3List"></div>
+</div>
+
+<div class="cs">
+<div class="ct">Custom Compound</div>
+<div class="custom-input">
+<div class="custom-row">
+<input type="number" id="inC" placeholder="C" min="0" max="20" value="">
+<input type="number" id="inH" placeholder="H" min="0" max="40" value="">
+<input type="number" id="inO" placeholder="O" min="0" max="20" value="">
+<input type="number" id="inN" placeholder="N" min="0" max="10" value="">
+</div>
+<div class="chk-row">
+<label><input type="checkbox" id="chkBio" checked> Biodegradable</label>
+<label><input type="checkbox" id="chkCOD" checked> COD Oxidizable</label>
+</div>
+<button class="cbtn" onclick="calcCustom()">Calculate →</button>
+</div>
+</div>
+
+<div class="cs">
+<div class="ct">ThOD Calculation</div>
+<div class="cb" id="calcBox">Select a compound to see the step-by-step calculation.</div>
+</div>
+
+<div class="cs">
+<div class="ct">Key Concept</div>
+<div class="insight" id="insightBox">
+<strong>ThOD</strong> = Theoretical (from formula, always calculable)<br>
+<strong>COD</strong> = What K₂Cr₂O₇ can oxidize (lab test)<br>
+<strong>BOD</strong> = What bacteria can consume (bio test)<br><br>
+<strong>BOD ≤ COD ≤ ThOD</strong> — always!
+</div>
+</div>
+</div>
+
+<!-- Right: Visualizations -->
+<div class="right">
+<div class="pnl r-box">
+<div class="r-hdr">
+<h3 id="vizTitle">Select a Compound</h3>
+<div class="eq" id="vizFormula"></div>
+</div>
+<canvas id="cMain" height="340"></canvas>
+</div>
+<div class="pnl r-box">
+<div class="r-hdr">
+<h3>Comparison Table</h3>
+<div class="eq">Click compounds to add them here</div>
+</div>
+<div class="tbl-wrap">
+<table class="cmp-table" id="cmpTable">
+<thead><tr><th>Compound</th><th>Formula</th><th>Category</th><th>ThOD</th><th>COD</th><th>BOD</th></tr></thead>
+<tbody id="tblBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+// === COMPOUND DATABASE ===
+var compounds = [
+  // Category 1: Fully Biodegradable — ThOD = COD = BOD
+  {name:'Glucose', c:6,h:12,o:6,n:0, mw:180, cat:1, bio:true, codOx:true, note:'Most common BOD test reference'},
+  {name:'Ethanol', c:2,h:6,o:1,n:0, mw:46, cat:1, bio:true, codOx:true, note:'Fully consumed by bacteria'},
+  {name:'Acetic Acid', c:2,h:4,o:2,n:0, mw:60, cat:1, bio:true, codOx:true, note:'Common fermentation product'},
+  {name:'Glycine', c:2,h:5,o:2,n:1, mw:75, cat:1, bio:true, codOx:true, note:'Amino acid — biodegradable'},
+  {name:'Methanol', c:1,h:4,o:1,n:0, mw:32, cat:1, bio:true, codOx:true, note:'Simplest alcohol'},
+
+  // Category 2: Non-biodegradable but COD oxidizable — ThOD = COD, BOD ≈ 0
+  {name:'Cellulose (unit)', c:6,h:10,o:5,n:0, mw:162, cat:2, bio:false, codOx:true, note:'Bacteria cannot break the β-linkage'},
+  {name:'Lignin (approx)', c:10,h:12,o:3,n:0, mw:180, cat:2, bio:false, codOx:true, note:'Recalcitrant plant polymer'},
+  {name:'EDTA', c:10,h:16,o:8,n:2, mw:292, cat:2, bio:false, codOx:true, note:'Chelating agent, non-biodegradable'},
+
+  // Category 3: Refractory — even COD ≈ 0
+  {name:'Benzene', c:6,h:6,o:0,n:0, mw:78, cat:3, bio:false, codOx:false, note:'Aromatic ring resists K₂Cr₂O₇'},
+  {name:'Naphthalene', c:10,h:8,o:0,n:0, mw:128, cat:3, bio:false, codOx:false, note:'PAH — two fused rings'},
+  {name:'Pyridine', c:5,h:5,o:0,n:1, mw:79, cat:3, bio:false, codOx:false, note:'N-heterocycle, refractory'},
+  {name:'Toluene', c:7,h:8,o:0,n:0, mw:92, cat:3, bio:false, codOx:false, note:'Aromatic, resists oxidation'},
+];
+
+var selected = null;
+var tableEntries = [];
+var animPhase = 0; // 0=idle, 1=thod, 2=cod, 3=bod, 4=done
+var animTimer = 0;
+
+// === ThOD CALCULATION ===
+// CₐHᵦOᵧNᵟ + [a + b/4 - c/2 - 3d/4] O₂ → a CO₂ + (b/2 - 3d/2) H₂O + d NH₃
+// ThOD = [a + b/4 - c/2 - 3d/4] × 32 / MW  (g O₂ per g compound)
+// For nitrogenous: if we consider full nitrification, add oxygen for NH₃→NO₃
+
+function calcThOD(c, h, o, n, mw){
+  var o2moles = c + h/4 - o/2 - 3*n/4;
+  var thod_per_mole = o2moles * 32; // g O₂ per mole compound
+  var thod_per_g = thod_per_mole / mw; // g O₂ per g compound
+  return {o2moles: o2moles, thod_mole: thod_per_mole, thod_g: thod_per_g,
+          co2: c, h2o: h/2 - 3*n/2, nh3: n};
+}
+
+// === BUILD UI ===
+function buildCompoundList(){
+  var cat1 = document.getElementById('cat1List');
+  var cat2 = document.getElementById('cat2List');
+  var cat3 = document.getElementById('cat3List');
+  cat1.innerHTML = ''; cat2.innerHTML = ''; cat3.innerHTML = '';
+
+  for(var i=0;i<compounds.length;i++){
+    var cmp = compounds[i];
+    var div = document.createElement('div');
+    div.className = 'cmp-card';
+    div.dataset.idx = i;
+    var dotColor = cmp.cat===1 ? 'var(--bod)' : cmp.cat===2 ? 'var(--cod)' : 'var(--rd)';
+    var formula = 'C'+cmp.c+'H'+cmp.h + (cmp.o>0?'O'+cmp.o:'') + (cmp.n>0?'N'+cmp.n:'');
+    div.innerHTML = '<div class="cmp-dot" style="background:'+dotColor+'"></div>' +
+      '<div><span class="cmp-name">'+cmp.name+'</span> <span class="cmp-formula">'+formula+'</span></div>';
+    div.onclick = (function(idx){ return function(){ selectCompound(idx); }; })(i);
+
+    if(cmp.cat===1) cat1.appendChild(div);
+    else if(cmp.cat===2) cat2.appendChild(div);
+    else cat3.appendChild(div);
+  }
+}
+
+function selectCompound(idx){
+  selected = compounds[idx];
+  // Highlight
+  var cards = document.querySelectorAll('.cmp-card');
+  for(var i=0;i<cards.length;i++){
+    cards[i].classList.toggle('active', +cards[i].dataset.idx === idx);
+  }
+  animPhase = 1;
+  animTimer = 0;
+  updateAll();
+  addToTable(selected);
+}
+
+function calcCustom(){
+  var c = +document.getElementById('inC').value || 0;
+  var h = +document.getElementById('inH').value || 0;
+  var o = +document.getElementById('inO').value || 0;
+  var n = +document.getElementById('inN').value || 0;
+  if(c===0 && h===0) return;
+  var mw = c*12 + h*1 + o*16 + n*14;
+  var bio = document.getElementById('chkBio').checked;
+  var codOx = document.getElementById('chkCOD').checked;
+  var cat = bio ? 1 : codOx ? 2 : 3;
+  selected = {name:'Custom', c:c, h:h, o:o, n:n, mw:mw, cat:cat, bio:bio, codOx:codOx, note:'User-defined compound'};
+  animPhase = 1;
+  animTimer = 0;
+  updateAll();
+  addToTable(selected);
+}
+
+function addToTable(cmp){
+  // Check if already in table
+  for(var i=0;i<tableEntries.length;i++){
+    if(tableEntries[i].name === cmp.name && tableEntries[i].c===cmp.c) return;
+  }
+  tableEntries.push(cmp);
+  renderTable();
+}
+
+function renderTable(){
+  var tbody = document.getElementById('tblBody');
+  tbody.innerHTML = '';
+  for(var i=0;i<tableEntries.length;i++){
+    var cmp = tableEntries[i];
+    var thod = calcThOD(cmp.c, cmp.h, cmp.o, cmp.n, cmp.mw);
+    var formula = 'C'+cmp.c+'H'+cmp.h + (cmp.o>0?'O'+cmp.o:'') + (cmp.n>0?'N'+cmp.n:'');
+    var catLabel = cmp.cat===1 ? 'Bio' : cmp.cat===2 ? 'Non-Bio' : 'Refractory';
+    var codVal = cmp.codOx ? thod.thod_g.toFixed(2) : '≈ 0';
+    var bodVal = cmp.bio ? thod.thod_g.toFixed(2) : '≈ 0';
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td class="cname">'+cmp.name+'</td><td style="font-family:Fira Code,monospace;font-size:0.62rem">'+formula+'</td>' +
+      '<td>'+catLabel+'</td>' +
+      '<td class="v-thod">'+thod.thod_g.toFixed(2)+'</td>' +
+      '<td class="v-cod">'+codVal+'</td>' +
+      '<td class="v-bod">'+bodVal+'</td>';
+    tbody.appendChild(tr);
+  }
+}
+
+// === CANVAS ===
+var cMain = document.getElementById('cMain');
+var ctx = cMain.getContext('2d');
+
+function resizeCv(){
+  var w = cMain.parentElement.clientWidth;
+  cMain.width = w*2;
+  cMain.height = 340*2;
+  cMain.style.height = '340px';
+  ctx.setTransform(2,0,0,2,0,0);
+}
+
+function drawMain(){
+  var W = cMain.width/2;
+  var H = cMain.height/2;
+  ctx.clearRect(0,0,W,H);
+
+  if(!selected){
+    ctx.fillStyle = '#4a5e70';
+    ctx.font = '500 14px Plus Jakarta Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText('← Select a compound from the left panel', W/2, H/2 - 10);
+    ctx.font = '400 11px Plus Jakarta Sans';
+    ctx.fillText('or enter a custom formula', W/2, H/2 + 14);
+    return;
+  }
+
+  var cmp = selected;
+  var thod = calcThOD(cmp.c, cmp.h, cmp.o, cmp.n, cmp.mw);
+  var formula = 'C'+cmp.c+'H'+cmp.h + (cmp.o>0?'O'+cmp.o:'') + (cmp.n>0?'N'+cmp.n:'');
+
+  // Update header
+  document.getElementById('vizTitle').textContent = cmp.name;
+  document.getElementById('vizFormula').textContent = formula + ' | MW = ' + cmp.mw + ' g/mol';
+
+  // Layout: Left = bars, Right = animated test
+  var leftW = W * 0.42;
+  var rightW = W - leftW;
+
+  // === LEFT: Nested Bars ===
+  var barX = 40;
+  var barW = leftW - 70;
+  var barStartY = 45;
+  var barH = 50;
+  var gap = 15;
+
+  // Calculate animation progress
+  var thodShow = animPhase >= 1;
+  var codShow = animPhase >= 2;
+  var bodShow = animPhase >= 3;
+  var thodFrac = thodShow ? Math.min(animTimer / 30, 1) : 0;
+  var codFrac = codShow ? Math.min((animTimer - 30) / 30, 1) : 0;
+  var bodFrac = bodShow ? Math.min((animTimer - 60) / 30, 1) : 0;
+
+  if(animPhase >= 4){thodFrac=1;codFrac=1;bodFrac=1;}
+
+  var maxVal = thod.thod_g;
+  if(maxVal <= 0) maxVal = 1;
+
+  // ThOD bar
+  var thodBarW = barW * thodFrac;
+  drawBar(ctx, barX, barStartY, thodBarW, barH, 'rgba(167,139,250,0.25)', 'rgba(167,139,250,0.6)', 'ThOD', thod.thod_g.toFixed(2) + ' g O₂/g', thodFrac);
+
+  // COD bar
+  var codY = barStartY + barH + gap;
+  var codVal = cmp.codOx ? thod.thod_g : 0;
+  var codBarW = barW * (codVal/maxVal) * codFrac;
+  drawBar(ctx, barX, codY, codBarW, barH, 'rgba(245,158,11,0.25)', 'rgba(245,158,11,0.6)', 'COD', cmp.codOx ? codVal.toFixed(2) + ' g O₂/g' : '≈ 0', codFrac);
+
+  // BOD bar
+  var bodY = codY + barH + gap;
+  var bodVal = cmp.bio ? thod.thod_g : 0;
+  var bodBarW = barW * (bodVal/maxVal) * bodFrac;
+  drawBar(ctx, barX, bodY, bodBarW, barH, 'rgba(16,185,129,0.25)', 'rgba(16,185,129,0.6)', 'BOD', cmp.bio ? bodVal.toFixed(2) + ' g O₂/g' : '≈ 0', bodFrac);
+
+  // Category result text
+  var resY = bodY + barH + 30;
+  ctx.textAlign = 'center';
+  if(animPhase >= 4){
+    if(cmp.cat === 1){
+      ctx.fillStyle = '#10b981';
+      ctx.font = '700 12px Plus Jakarta Sans';
+      ctx.fillText('ThOD = COD = BOD ✓', leftW/2, resY);
+      ctx.fillStyle = 'rgba(16,185,129,0.6)';
+      ctx.font = '400 10px Plus Jakarta Sans';
+      ctx.fillText('Fully biodegradable — all three are equal!', leftW/2, resY + 18);
+    } else if(cmp.cat === 2){
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = '700 12px Plus Jakarta Sans';
+      ctx.fillText('ThOD = COD > BOD ≈ 0', leftW/2, resY);
+      ctx.fillStyle = 'rgba(245,158,11,0.6)';
+      ctx.font = '400 10px Plus Jakarta Sans';
+      ctx.fillText('K₂Cr₂O₇ oxidizes it, but bacteria cannot!', leftW/2, resY + 18);
+    } else {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = '700 12px Plus Jakarta Sans';
+      ctx.fillText('ThOD > 0, COD ≈ 0, BOD = 0', leftW/2, resY);
+      ctx.fillStyle = 'rgba(239,68,68,0.6)';
+      ctx.font = '400 10px Plus Jakarta Sans';
+      ctx.fillText('Even K₂Cr₂O₇ cannot oxidize this compound!', leftW/2, resY + 18);
+    }
+  }
+
+  // === RIGHT: Animated Test ===
+  var testX = leftW + 20;
+  var testY = 30;
+  var testW = rightW - 50;
+  var testH = H - 60;
+
+  // Molecule in center
+  var molCX = testX + testW/2;
+  var molCY = testY + 60;
+
+  // Draw molecule representation (hexagonal for aromatics, circle for others)
+  drawMolecule(ctx, molCX, molCY, cmp, formula);
+
+  // Animated agents
+  var agentY = molCY + 80;
+  var agentSpacing = testW / 3;
+
+  // Agent 1: ThOD (calculator/math)
+  drawAgent(ctx, testX + agentSpacing*0.5, agentY, 'ThOD', 'Calculator', '#a78bfa',
+    'Always works!', true, thodFrac >= 0.8);
+
+  // Agent 2: COD (K₂Cr₂O₇ bottle)
+  var codSuccess = cmp.codOx;
+  drawAgent(ctx, testX + agentSpacing*1.5, agentY, 'COD', 'K₂Cr₂O₇', '#f59e0b',
+    codSuccess ? 'Oxidized!' : 'Bounced off!', codSuccess, codFrac >= 0.8);
+
+  // Agent 3: BOD (bacteria)
+  var bodSuccess = cmp.bio;
+  drawAgent(ctx, testX + agentSpacing*2.5, agentY, 'BOD', 'Bacteria', '#10b981',
+    bodSuccess ? 'Consumed!' : 'Cannot eat!', bodSuccess, bodFrac >= 0.8);
+
+  // Reaction arrows (animated)
+  if(thodFrac > 0.3 && thodFrac < 1){
+    drawArrow(ctx, testX + agentSpacing*0.5, agentY - 20, molCX - 30, molCY + 25, '#a78bfa', thodFrac);
+  }
+  if(codFrac > 0.3 && codFrac < 1){
+    drawArrow(ctx, testX + agentSpacing*1.5, agentY - 20, molCX, molCY + 25, '#f59e0b', codFrac);
+  }
+  if(bodFrac > 0.3 && bodFrac < 1){
+    drawArrow(ctx, testX + agentSpacing*2.5, agentY - 20, molCX + 30, molCY + 25, '#10b981', bodFrac);
+  }
+
+  // Balanced equation at bottom
+  var eqY = H - 20;
+  ctx.fillStyle = 'rgba(167,139,250,0.5)';
+  ctx.font = '400 9px Fira Code';
+  ctx.textAlign = 'center';
+  var eqStr = formula + ' + ' + formatNum(thod.o2moles) + ' O₂ → ' +
+    thod.co2 + ' CO₂ + ' + formatNum(thod.h2o) + ' H₂O' +
+    (thod.nh3 > 0 ? ' + ' + thod.nh3 + ' NH₃' : '');
+  ctx.fillText(eqStr, W/2, eqY);
+
+  // Update calc box
+  updateCalcBox(cmp, thod, formula);
+  updateInsight(cmp, thod);
+}
+
+function formatNum(n){
+  if(n === Math.floor(n)) return n.toString();
+  // Check common fractions
+  if(Math.abs(n*2 - Math.round(n*2)) < 0.01) return (Math.round(n*2))+'/2';
+  if(Math.abs(n*4 - Math.round(n*4)) < 0.01) return (Math.round(n*4))+'/4';
+  return n.toFixed(2);
+}
+
+function drawBar(ctx, x, y, w, h, fillColor, strokeColor, label, valText, frac){
+  if(frac <= 0) {
+    // Empty state
+    ctx.strokeStyle = 'rgba(100,120,140,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,3]);
+    ctx.strokeRect(x, y, 10, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'var(--tm)';
+    ctx.font = '600 10px Plus Jakarta Sans';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x, y - 6);
+    return;
+  }
+  // Filled bar
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, Math.max(w, 4), h);
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, Math.max(w, 4), h);
+
+  // Label
+  ctx.fillStyle = strokeColor;
+  ctx.font = '700 10px Plus Jakarta Sans';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, x, y - 6);
+
+  // Value
+  if(frac >= 0.8){
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 10px Fira Code';
+    ctx.textAlign = 'left';
+    ctx.fillText(valText, x + Math.max(w, 4) + 8, y + h/2 + 4);
+  }
+}
+
+function drawMolecule(ctx, cx, cy, cmp, formula){
+  // For aromatics (cat 3), draw hexagonal ring
+  if(cmp.cat === 3){
+    ctx.strokeStyle = 'rgba(239,68,68,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(var i=0;i<6;i++){
+      var a = i * Math.PI/3 - Math.PI/6;
+      var x = cx + Math.cos(a)*25;
+      var y = cy + Math.sin(a)*25;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    // Inner circle (aromatic)
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14, 0, Math.PI*2);
+    ctx.stroke();
+    // Label
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '600 9px Fira Code';
+    ctx.textAlign = 'center';
+    ctx.fillText('Aromatic Ring', cx, cy + 42);
+  } else {
+    // Regular molecule — circle representation
+    var col = cmp.cat===1 ? '#10b981' : '#f59e0b';
+    // Outer glow
+    var grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 35);
+    grd.addColorStop(0, col.replace(')', ',0.2)').replace('rgb','rgba'));
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 35, 0, Math.PI*2);
+    ctx.fill();
+    // Circle
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22, 0, Math.PI*2);
+    ctx.stroke();
+    // Atoms
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 10px Fira Code';
+    ctx.textAlign = 'center';
+    ctx.fillText(formula, cx, cy + 4);
+  }
+
+  // Name above
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 11px Plus Jakarta Sans';
+  ctx.textAlign = 'center';
+  ctx.fillText(selected.name, cx, cy - 38);
+}
+
+function drawAgent(ctx, x, y, testName, agentName, color, resultText, success, showResult){
+  // Agent circle
+  ctx.fillStyle = color.replace(')', ',0.15)').replace('#', 'rgba(');
+  // Use hex to rgba conversion
+  var r = parseInt(color.slice(1,3),16);
+  var g = parseInt(color.slice(3,5),16);
+  var b = parseInt(color.slice(5,7),16);
+  ctx.fillStyle = 'rgba('+r+','+g+','+b+',0.12)';
+  ctx.beginPath();
+  ctx.arc(x, y, 28, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Agent label
+  ctx.fillStyle = color;
+  ctx.font = '600 9px Plus Jakarta Sans';
+  ctx.textAlign = 'center';
+  ctx.fillText(agentName, x, y + 3);
+
+  // Test name
+  ctx.font = '700 10px Plus Jakarta Sans';
+  ctx.fillText(testName, x, y - 36);
+
+  // Result
+  if(showResult){
+    ctx.font = '600 8px Fira Code';
+    if(success){
+      ctx.fillStyle = color;
+      ctx.fillText(resultText, x, y + 48);
+      // Checkmark
+      ctx.fillStyle = color;
+      ctx.font = '700 14px Plus Jakarta Sans';
+      ctx.fillText('✓', x, y + 64);
+    } else {
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText(resultText, x, y + 48);
+      ctx.font = '700 14px Plus Jakarta Sans';
+      ctx.fillText('✗', x, y + 64);
+    }
+  }
+}
+
+function drawArrow(ctx, fromX, fromY, toX, toY, color, frac){
+  var progress = (frac - 0.3) / 0.7;
+  var midX = fromX + (toX - fromX) * progress;
+  var midY = fromY + (toY - fromY) * progress;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.4;
+  ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(midX, midY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+}
+
+function updateCalcBox(cmp, thod, formula){
+  var o2str = formatNum(thod.o2moles);
+  var h2oStr = formatNum(thod.h2o);
+
+  var text = '<span class="w">Compound: '+cmp.name+' ('+formula+')</span>\n' +
+    'MW = ';
+  if(cmp.c>0) text += cmp.c+'×12';
+  if(cmp.h>0) text += ' + '+cmp.h+'×1';
+  if(cmp.o>0) text += ' + '+cmp.o+'×16';
+  if(cmp.n>0) text += ' + '+cmp.n+'×14';
+  text += ' = <span class="w">'+cmp.mw+' g/mol</span>\n\n';
+
+  text += '<span class="w">Balanced Equation:</span>\n';
+  text += formula + ' + '+o2str+' O₂ →\n';
+  text += '  '+thod.co2+' CO₂ + '+h2oStr+' H₂O';
+  if(thod.nh3 > 0) text += ' + '+thod.nh3+' NH₃';
+  text += '\n\n';
+
+  text += '<span class="th">ThOD Calculation:</span>\n';
+  text += 'O₂ needed = a + b/4 - c/2 - 3d/4\n';
+  text += '  = '+cmp.c+' + '+cmp.h+'/4 - '+cmp.o+'/2 - 3×'+cmp.n+'/4\n';
+  text += '  = <span class="th">'+o2str+' moles O₂</span>\n\n';
+  text += 'ThOD = '+o2str+' × 32 / '+cmp.mw+'\n';
+  text += '     = <span class="th">'+thod.thod_g.toFixed(4)+' g O₂/g</span>\n\n';
+
+  var codVal = cmp.codOx ? thod.thod_g.toFixed(4) : '≈ 0';
+  var bodVal = cmp.bio ? thod.thod_g.toFixed(4) : '≈ 0';
+  text += '<span class="co">COD = '+codVal+' g O₂/g</span>\n';
+  text += '<span class="bo">BOD = '+bodVal+' g O₂/g</span>';
+
+  document.getElementById('calcBox').innerHTML = text;
+}
+
+function updateInsight(cmp, thod){
+  var html = '';
+  if(cmp.cat === 1){
+    html = '<strong>'+cmp.name+'</strong> is fully biodegradable.<br><br>' +
+      '→ Bacteria can consume it completely<br>' +
+      '→ K₂Cr₂O₇ can oxidize it completely<br>' +
+      '→ ThOD = COD = BOD = <strong>'+thod.thod_g.toFixed(2)+' g O₂/g</strong><br><br>' +
+      cmp.note;
+  } else if(cmp.cat === 2){
+    html = '<strong>'+cmp.name+'</strong> is NOT biodegradable, but IS chemically oxidizable.<br><br>' +
+      '→ Bacteria CANNOT break it down → <strong>BOD ≈ 0</strong><br>' +
+      '→ K₂Cr₂O₇ CAN oxidize it → <strong>COD = '+thod.thod_g.toFixed(2)+'</strong><br>' +
+      '→ ThOD calculable from formula → <strong>ThOD = '+thod.thod_g.toFixed(2)+'</strong><br><br>' +
+      cmp.note;
+  } else {
+    html = '<strong>'+cmp.name+'</strong> is a refractory compound.<br><br>' +
+      '→ Bacteria CANNOT consume it → <strong>BOD = 0</strong><br>' +
+      '→ K₂Cr₂O₇ CANNOT oxidize it → <strong>COD ≈ 0</strong><br>' +
+      '→ Only ThOD works (from formula) → <strong>ThOD = '+thod.thod_g.toFixed(2)+'</strong><br><br>' +
+      cmp.note;
+  }
+  document.getElementById('insightBox').innerHTML = html;
+}
+
+// === ANIMATION ===
+function updateAll(){
+  drawMain();
+}
+
+var lastT = 0;
+function animate(t){
+  requestAnimationFrame(animate);
+  var dt = Math.min((t-lastT)/1000, 0.05);
+  lastT = t;
+
+  if(selected && animPhase >= 1 && animPhase < 4){
+    animTimer += dt * 60; // ~60 ticks per second
+    if(animTimer >= 30 && animPhase === 1) animPhase = 2;
+    if(animTimer >= 60 && animPhase === 2) animPhase = 3;
+    if(animTimer >= 90 && animPhase === 3) animPhase = 4;
+  }
+
+  drawMain();
+}
+
+// === INIT ===
+function onResize(){
+  resizeCv();
+  drawMain();
+}
+window.addEventListener('resize', onResize);
+buildCompoundList();
+resizeCv();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
