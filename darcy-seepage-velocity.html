@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darcy's Law & Seepage Velocity — Interactive Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0b1215;
+    --panel: #111c22;
+    --panel-border: #1a2e38;
+    --text: #b8cdd6;
+    --text-muted: #5a7a8a;
+    --accent: #22d3ee;
+    --accent2: #f59e0b;
+    --water: #0ea5e9;
+    --water-dark: #0369a1;
+    --soil: #78716c;
+    --soil-dark: #44403c;
+    --tracer: #f43f5e;
+    --pore: rgba(14, 165, 233, 0.15);
+    --success: #34d399;
+    --danger: #f43f5e;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .app {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 20px 16px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.03em;
+  }
+
+  .header .subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  /* Panels */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+  }
+
+  /* Controls */
+  .controls {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .ctrl-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ctrl-title {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .ctrl-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+  }
+
+  .ctrl-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 5px;
+    border-radius: 3px;
+    background: #1a2e38;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(34, 211, 238, 0.3);
+  }
+
+  /* Calc panel */
+  .calc-box {
+    background: rgba(0,0,0,0.35);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+  }
+
+  .calc-box .step {
+    color: var(--text);
+  }
+
+  .calc-box .result {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .calc-box .highlight {
+    color: var(--accent2);
+    font-weight: 600;
+  }
+
+  .calc-box .danger {
+    color: var(--danger);
+    font-weight: 600;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    background: rgba(0,0,0,0.3);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .btn:hover {
+    background: rgba(34, 211, 238, 0.1);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn.active {
+    background: rgba(34, 211, 238, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Canvas */
+  .canvas-area {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .canvas-header {
+    padding: 10px 16px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .canvas-header .view-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .canvas-header .formula {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  .canvas-header .formula span {
+    color: var(--accent);
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    cursor: default;
+  }
+
+  .legend-bar {
+    padding: 8px 16px;
+    background: rgba(0,0,0,0.2);
+    border-top: 1px solid var(--panel-border);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .leg-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .leg-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .leg-line {
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  /* Key insight box */
+  .insight-box {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    background: rgba(245, 158, 11, 0.06);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--accent2);
+  }
+
+  .insight-box strong {
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* Speed comparison bar */
+  .speed-compare {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .speed-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .speed-bar-label {
+    width: 28px;
+    text-align: right;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+  }
+
+  .speed-bar-track {
+    flex: 1;
+    height: 14px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .speed-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+
+  .speed-bar-val {
+    width: 70px;
+    text-align: left;
+    font-size: 0.68rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <h1>Darcy's Law & Seepage Velocity</h1>
+    <div class="subtitle">v = k·i &nbsp;|&nbsp; vₛ = v / n &nbsp;|&nbsp; Tracer moves at seepage velocity</div>
+  </div>
+
+  <div class="layout">
+    <!-- Controls -->
+    <div class="panel controls">
+      <div class="ctrl-section">
+        <div class="ctrl-title">Aquifer Properties</div>
+        <div class="ctrl-row">
+          <div class="ctrl-label">
+            Permeability (k)
+            <span class="ctrl-val" id="kVal">5.00 m/day</span>
+          </div>
+          <input type="range" id="kSlider" min="0.1" max="15" step="0.1" value="5">
+        </div>
+        <div class="ctrl-row">
+          <div class="ctrl-label">
+            Porosity (n)
+            <span class="ctrl-val" id="nVal">15%</span>
+          </div>
+          <input type="range" id="nSlider" min="5" max="50" step="1" value="15">
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-title">Well Configuration</div>
+        <div class="ctrl-row">
+          <div class="ctrl-label">
+            Distance (L)
+            <span class="ctrl-val" id="lVal">100 m</span>
+          </div>
+          <input type="range" id="lSlider" min="20" max="300" step="5" value="100">
+        </div>
+        <div class="ctrl-row">
+          <div class="ctrl-label">
+            Head Difference (Δh)
+            <span class="ctrl-val" id="dhVal">3.0 m</span>
+          </div>
+          <input type="range" id="dhSlider" min="0.5" max="10" step="0.5" value="3">
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-title">Tracer Animation</div>
+        <div class="btn-row">
+          <button class="btn active" id="btnPlay" onclick="toggleTracer()">▶ Play</button>
+          <button class="btn" id="btnReset" onclick="resetTracer()">↺ Reset</button>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-title">Live Calculations</div>
+        <div class="calc-box" id="calcBox"></div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-title">Speed Comparison</div>
+        <div class="speed-compare">
+          <div class="speed-bar-row">
+            <span class="speed-bar-label">v</span>
+            <div class="speed-bar-track">
+              <div class="speed-bar-fill" id="vBar" style="width:0%; background: var(--accent);"></div>
+            </div>
+            <span class="speed-bar-val" id="vBarVal" style="color:var(--accent);">—</span>
+          </div>
+          <div class="speed-bar-row">
+            <span class="speed-bar-label">vₛ</span>
+            <div class="speed-bar-track">
+              <div class="speed-bar-fill" id="vsBar" style="width:0%; background: var(--danger);"></div>
+            </div>
+            <span class="speed-bar-val" id="vsBarVal" style="color:var(--danger);">—</span>
+          </div>
+        </div>
+        <div class="insight-box" id="insightBox"></div>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="panel canvas-area">
+      <div class="canvas-header">
+        <span class="view-label">Cross-Section with Pore View</span>
+        <span class="formula">v = <span>k × i</span> &nbsp;|&nbsp; vₛ = <span>v / n</span></span>
+      </div>
+      <canvas id="mainCanvas"></canvas>
+      <div class="legend-bar">
+        <div class="leg-item"><div class="leg-dot" style="background:#78716c;"></div>Soil Grains</div>
+        <div class="leg-item"><div class="leg-dot" style="background:rgba(14,165,233,0.3);"></div>Pore Water</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#f43f5e;"></div>Tracer Particle</div>
+        <div class="leg-item"><div class="leg-line" style="background:#22d3ee;"></div>Darcy Velocity (v)</div>
+        <div class="leg-item"><div class="leg-line" style="background:#f43f5e;"></div>Seepage Velocity (vₛ)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+// Helper: draw rounded rectangle (cross-browser compatible)
+function drawRoundRect(c, x, y, w, h, r) {
+  if (w < 0) { x += w; w = -w; }
+  if (h < 0) { y += h; h = -h; }
+  r = Math.min(r, w / 2, h / 2);
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);
+  c.arcTo(x + w, y, x + w, y + r, r);
+  c.lineTo(x + w, y + h - r);
+  c.arcTo(x + w, y + h, x + w - r, y + h, r);
+  c.lineTo(x + r, y + h);
+  c.arcTo(x, y + h, x, y + h - r, r);
+  c.lineTo(x, y + r);
+  c.arcTo(x, y, x + r, y, r);
+  c.closePath();
+}
+
+// --- State ---
+let tracerPlaying = false;
+let tracerProgress = 0; // 0 to 1
+let animFrame = null;
+let lastTime = 0;
+
+// Grain layout — precomputed for consistent look
+let grains = [];
+let porePathPoints = [];
+
+function getParams() {
+  return {
+    k: parseFloat(document.getElementById('kSlider').value),
+    n: parseFloat(document.getElementById('nSlider').value) / 100,
+    L: parseFloat(document.getElementById('lSlider').value),
+    dh: parseFloat(document.getElementById('dhSlider').value),
+  };
+}
+
+function computeValues(p) {
+  const i = p.dh / p.L;
+  const v = p.k * i; // Darcy velocity
+  const vs = v / p.n; // Seepage velocity
+  const tTracer = p.L / vs; // Time for tracer
+  return { i, v, vs, tTracer };
+}
+
+// --- Resize ---
+function resize() {
+  const wrapper = canvas.parentElement;
+  const w = wrapper.clientWidth;
+  const h = Math.max(560, Math.min(w * 0.65, 680));
+  canvas.width = w * 2;
+  canvas.height = h * 2;
+  canvas.style.height = h + 'px';
+  ctx.setTransform(2, 0, 0, 2, 0, 0);
+  generateGrains();
+  generatePorePath();
+  draw();
+}
+
+// --- Generate soil grains for pore view ---
+function generateGrains() {
+  grains = [];
+  const W = canvas.width / 2;
+  const H = canvas.height / 2;
+
+  // Pore view region
+  const poreX = W * 0.42;
+  const poreY = H * 0.32;
+  const poreW = W * 0.54;
+  const poreH = H * 0.42;
+
+  // Place grains with some randomness
+  const spacing = 28;
+  const rows = Math.floor(poreH / spacing);
+  const cols = Math.floor(poreW / spacing);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const baseX = poreX + 16 + c * spacing;
+      const baseY = poreY + 16 + r * spacing;
+      const offsetX = (Math.sin(r * 7 + c * 13) * 6);
+      const offsetY = (Math.cos(r * 11 + c * 5) * 5);
+      const radius = 7 + Math.sin(r * 3 + c * 9) * 3;
+      grains.push({
+        x: baseX + offsetX,
+        y: baseY + offsetY,
+        r: radius,
+      });
+    }
+  }
+}
+
+// --- Generate pore path (tracer follows this) ---
+function generatePorePath() {
+  porePathPoints = [];
+  const W = canvas.width / 2;
+  const H = canvas.height / 2;
+
+  const poreX = W * 0.42;
+  const poreY = H * 0.32;
+  const poreW = W * 0.54;
+  const poreH = H * 0.42;
+  const midY = poreY + poreH / 2;
+
+  const numPoints = 40;
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const x = poreX + 10 + t * (poreW - 20);
+    // Zigzag path simulating movement through pores
+    const wave1 = Math.sin(t * Math.PI * 6) * 14;
+    const wave2 = Math.cos(t * Math.PI * 4 + 1) * 8;
+    const wave3 = Math.sin(t * Math.PI * 10) * 4;
+    const y = midY + wave1 + wave2 + wave3;
+    porePathPoints.push({ x, y });
+  }
+}
+
+// --- Get point on pore path at progress t (0-1) ---
+function getPathPoint(t) {
+  const idx = t * (porePathPoints.length - 1);
+  const i0 = Math.floor(idx);
+  const i1 = Math.min(i0 + 1, porePathPoints.length - 1);
+  const frac = idx - i0;
+  return {
+    x: porePathPoints[i0].x + (porePathPoints[i1].x - porePathPoints[i0].x) * frac,
+    y: porePathPoints[i0].y + (porePathPoints[i1].y - porePathPoints[i0].y) * frac,
+  };
+}
+
+// --- Draw ---
+function draw() {
+  const p = getParams();
+  const vals = computeValues(p);
+  const W = canvas.width / 2;
+  const H = canvas.height / 2;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ====== LEFT SIDE: Macro view (wells + soil) ======
+  const macroX = 16;
+  const macroY = 30;
+  const macroW = W * 0.35;
+  const macroH = H * 0.85;
+
+  // Section label
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 12px "Outfit"';
+  ctx.textAlign = 'left';
+  ctx.fillText('MACRO VIEW', macroX, macroY - 10);
+  ctx.fillStyle = var_mutedColor;
+  ctx.font = '400 10px "IBM Plex Mono"';
+  ctx.fillText('Two wells with flow between them', macroX, macroY + 4);
+
+  const groundY = macroY + 30;
+  const wellTopY = groundY;
+  const wellBottomY = macroY + macroH - 20;
+  const wellH = wellBottomY - wellTopY;
+
+  const well1X = macroX + 40;
+  const well2X = macroX + macroW - 40;
+
+  // Ground surface
+  ctx.fillStyle = '#292118';
+  ctx.fillRect(macroX, groundY - 10, macroW, 14);
+  ctx.fillStyle = '#3d3228';
+  for (let x = macroX; x < macroX + macroW; x += 8) {
+    ctx.fillRect(x, groundY - 8, 3, 3);
+  }
+
+  // Soil body
+  const soilGrad = ctx.createLinearGradient(0, groundY, 0, wellBottomY);
+  soilGrad.addColorStop(0, '#1e1612');
+  soilGrad.addColorStop(1, '#141010');
+  ctx.fillStyle = soilGrad;
+  ctx.fillRect(macroX, groundY + 4, macroW, wellH - 4);
+
+  // Soil grain dots (texture)
+  ctx.fillStyle = 'rgba(120, 113, 108, 0.15)';
+  for (let x = macroX + 5; x < macroX + macroW; x += 10) {
+    for (let y = groundY + 10; y < wellBottomY; y += 10) {
+      const offX = (y % 20 === 0) ? 5 : 0;
+      ctx.beginPath();
+      ctx.arc(x + offX, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Water levels
+  const maxWaterDepth = wellH * 0.7;
+  const waterLevelH1 = maxWaterDepth;
+  const waterLevelH2 = maxWaterDepth - (p.dh / 15) * maxWaterDepth;
+  const waterY1 = wellBottomY - waterLevelH1;
+  const waterY2 = wellBottomY - waterLevelH2;
+
+  // Water table line between wells
+  ctx.strokeStyle = 'rgba(14, 165, 233, 0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(well1X, waterY1);
+  ctx.lineTo(well2X, waterY2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Well casings
+  function drawMacroWell(x, waterY, label, headLabel) {
+    // Casing
+    ctx.fillStyle = '#4a5568';
+    ctx.fillRect(x - 4, groundY - 16, 8, wellH + 16);
+
+    // Water in well
+    const waterGrad = ctx.createLinearGradient(0, waterY, 0, wellBottomY);
+    waterGrad.addColorStop(0, 'rgba(14, 165, 233, 0.4)');
+    waterGrad.addColorStop(1, 'rgba(3, 105, 161, 0.2)');
+    ctx.fillStyle = waterGrad;
+    ctx.fillRect(x - 10, waterY, 20, wellBottomY - waterY);
+
+    // Water surface
+    ctx.strokeStyle = '#0ea5e9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 12, waterY);
+    ctx.lineTo(x + 12, waterY);
+    ctx.stroke();
+
+    // Well head
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(x - 8, groundY - 20, 16, 8);
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 11px "Outfit"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, groundY - 26);
+
+    // Head label
+    ctx.fillStyle = '#0ea5e9';
+    ctx.font = '500 9px "IBM Plex Mono"';
+    ctx.fillText(headLabel, x, waterY - 6);
+  }
+
+  drawMacroWell(well1X, waterY1, 'Well-1', 'h₁ (higher)');
+  drawMacroWell(well2X, waterY2, 'Well-2', 'h₂ (lower)');
+
+  // Distance annotation
+  const distAnnY = wellBottomY + 14;
+  ctx.strokeStyle = 'rgba(200,210,220,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(well1X, distAnnY);
+  ctx.lineTo(well2X, distAnnY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(well1X, distAnnY - 4);
+  ctx.lineTo(well1X, distAnnY + 4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(well2X, distAnnY - 4);
+  ctx.lineTo(well2X, distAnnY + 4);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(200,210,220,0.5)';
+  ctx.font = '500 10px "IBM Plex Mono"';
+  ctx.textAlign = 'center';
+  ctx.fillText(`L = ${p.L} m`, (well1X + well2X) / 2, distAnnY + 14);
+
+  // Δh annotation
+  const dhAnnX = well2X + 24;
+  ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(dhAnnX, waterY1);
+  ctx.lineTo(dhAnnX, waterY2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Arrows
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.7)';
+  ctx.beginPath();
+  ctx.moveTo(dhAnnX - 4, waterY1 + 6);
+  ctx.lineTo(dhAnnX + 4, waterY1 + 6);
+  ctx.lineTo(dhAnnX, waterY1);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(dhAnnX - 4, waterY2 - 6);
+  ctx.lineTo(dhAnnX + 4, waterY2 - 6);
+  ctx.lineTo(dhAnnX, waterY2);
+  ctx.fill();
+
+  ctx.fillStyle = var_accent2Color;
+  ctx.font = '500 9px "IBM Plex Mono"';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Δh=${p.dh}m`, dhAnnX + 6, (waterY1 + waterY2) / 2 + 3);
+
+  // Flow direction arrow in soil
+  const flowArrowY = (waterY1 + waterY2) / 2 + 15;
+  const flowAX = well1X + 20;
+  const flowBX = well2X - 20;
+  ctx.strokeStyle = 'rgba(34, 211, 238, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(flowAX, flowArrowY);
+  ctx.lineTo(flowBX, flowArrowY);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.6)';
+  ctx.beginPath();
+  ctx.moveTo(flowBX, flowArrowY);
+  ctx.lineTo(flowBX - 8, flowArrowY - 5);
+  ctx.lineTo(flowBX - 8, flowArrowY + 5);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.7)';
+  ctx.font = '500 9px "IBM Plex Mono"';
+  ctx.textAlign = 'center';
+  ctx.fillText('Flow →', (flowAX + flowBX) / 2, flowArrowY - 8);
+
+  // ====== RIGHT SIDE: Pore-level zoom ======
+  const poreX = W * 0.42;
+  const poreY = H * 0.05;
+  const poreW = W * 0.54;
+  const poreTotalH = H * 0.55;
+
+  // Zoom connection lines
+  ctx.strokeStyle = 'rgba(200,210,220,0.1)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 4]);
+  const zoomSourceX = macroX + macroW * 0.5;
+  const zoomSourceY1 = groundY + wellH * 0.3;
+  const zoomSourceY2 = groundY + wellH * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(zoomSourceX + 20, zoomSourceY1);
+  ctx.lineTo(poreX, poreY + 30);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(zoomSourceX + 20, zoomSourceY2);
+  ctx.lineTo(poreX, poreY + poreTotalH - 30);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Section label
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 12px "Outfit"';
+  ctx.textAlign = 'left';
+  ctx.fillText('PORE-LEVEL VIEW (Zoomed In)', poreX, poreY);
+  ctx.fillStyle = var_mutedColor;
+  ctx.font = '400 10px "IBM Plex Mono"';
+  ctx.fillText('Tracer moves through pore spaces, not through grains', poreX, poreY + 16);
+
+  // Pore view background
+  const poreViewY = poreY + 28;
+  const poreViewH = poreTotalH - 28;
+
+  ctx.fillStyle = 'rgba(14, 165, 233, 0.04)';
+  ctx.strokeStyle = 'rgba(14, 165, 233, 0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  drawRoundRect(ctx, poreX, poreViewY, poreW, poreViewH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Draw soil grains
+  const porosity = p.n;
+  grains.forEach(g => {
+    // Scale grain size with porosity (lower porosity = bigger grains)
+    const scaleFactor = 1 + (0.5 - porosity) * 1.8;
+    const r = g.r * Math.max(scaleFactor, 0.4);
+
+    // Check bounds
+    if (g.x - r < poreX + 4 || g.x + r > poreX + poreW - 4) return;
+    if (g.y - r < poreViewY + 4 || g.y + r > poreViewY + poreViewH - 4) return;
+
+    const grainGrad = ctx.createRadialGradient(g.x - r * 0.3, g.y - r * 0.3, 0, g.x, g.y, r);
+    grainGrad.addColorStop(0, '#a8a29e');
+    grainGrad.addColorStop(0.5, '#78716c');
+    grainGrad.addColorStop(1, '#57534e');
+    ctx.fillStyle = grainGrad;
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Grain outline
+    ctx.strokeStyle = 'rgba(68, 64, 60, 0.6)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  });
+
+  // Draw pore path (faded)
+  ctx.strokeStyle = 'rgba(14, 165, 233, 0.12)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  porePathPoints.forEach((pt, i) => {
+    if (pt.x < poreX + 4 || pt.x > poreX + poreW - 4) return;
+    if (pt.y < poreViewY + 4 || pt.y > poreViewY + poreViewH - 4) return;
+    if (i === 0) ctx.moveTo(pt.x, pt.y);
+    else ctx.lineTo(pt.x, pt.y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Tracer trail
+  if (tracerProgress > 0) {
+    const trailPoints = Math.floor(tracerProgress * (porePathPoints.length - 1));
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i <= trailPoints && i < porePathPoints.length; i++) {
+      const pt = porePathPoints[i];
+      if (pt.x < poreX + 4 || pt.x > poreX + poreW - 4) continue;
+      if (i === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+  }
+
+  // Tracer particle
+  const tracerPt = getPathPoint(tracerProgress);
+  if (tracerPt.x >= poreX + 4 && tracerPt.x <= poreX + poreW - 4) {
+    // Glow
+    const glowGrad = ctx.createRadialGradient(tracerPt.x, tracerPt.y, 0, tracerPt.x, tracerPt.y, 16);
+    glowGrad.addColorStop(0, 'rgba(244, 63, 94, 0.4)');
+    glowGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(tracerPt.x, tracerPt.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Particle
+    ctx.fillStyle = '#f43f5e';
+    ctx.beginPath();
+    ctx.arc(tracerPt.x, tracerPt.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // ====== Velocity arrows below pore view ======
+  const arrowY = poreViewY + poreViewH + 24;
+  const arrowStartX = poreX + 10;
+  const maxArrowW = poreW - 20;
+
+  // Normalize arrows
+  const maxV = Math.max(vals.v, vals.vs);
+  const vArrowW = (vals.v / maxV) * maxArrowW * 0.9;
+  const vsArrowW = (vals.vs / maxV) * maxArrowW * 0.9;
+
+  // Darcy velocity arrow
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.2)';
+  ctx.beginPath();
+  drawRoundRect(ctx, arrowStartX, arrowY, vArrowW, 14, 3);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(34, 211, 238, 0.8)';
+  ctx.beginPath();
+  ctx.moveTo(arrowStartX + vArrowW, arrowY);
+  ctx.lineTo(arrowStartX + vArrowW + 10, arrowY + 7);
+  ctx.lineTo(arrowStartX + vArrowW, arrowY + 14);
+  ctx.fill();
+
+  ctx.fillStyle = var_accentColor;
+  ctx.font = '500 10px "IBM Plex Mono"';
+  ctx.textAlign = 'left';
+  ctx.fillText(`v = ${vals.v.toFixed(3)} m/day (Darcy)`, arrowStartX + vArrowW + 16, arrowY + 11);
+
+  // Seepage velocity arrow
+  const vsArrowY = arrowY + 24;
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+  ctx.beginPath();
+  drawRoundRect(ctx, arrowStartX, vsArrowY, vsArrowW, 14, 3);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.8)';
+  ctx.beginPath();
+  ctx.moveTo(arrowStartX + vsArrowW, vsArrowY);
+  ctx.lineTo(arrowStartX + vsArrowW + 10, vsArrowY + 7);
+  ctx.lineTo(arrowStartX + vsArrowW, vsArrowY + 14);
+  ctx.fill();
+
+  ctx.fillStyle = '#f43f5e';
+  ctx.font = '500 10px "IBM Plex Mono"';
+  ctx.fillText(`vₛ = ${vals.vs.toFixed(3)} m/day (Seepage = Tracer speed)`, arrowStartX + vsArrowW + 16, vsArrowY + 11);
+
+  // Ratio
+  ctx.fillStyle = var_accent2Color;
+  ctx.font = '600 10px "IBM Plex Mono"';
+  ctx.textAlign = 'right';
+  ctx.fillText(`vₛ / v = ${(vals.vs / vals.v).toFixed(1)}× (= 1/n)`, poreX + poreW - 10, vsArrowY + 32);
+
+  // Update UI
+  updateCalcBox(p, vals);
+  updateSpeedBars(vals);
+  updateInsight(p, vals);
+}
+
+const var_mutedColor = '#5a7a8a';
+const var_accentColor = '#22d3ee';
+const var_accent2Color = '#f59e0b';
+
+function updateCalcBox(p, vals) {
+  document.getElementById('calcBox').innerHTML =
+    `<span class="step">i = Δh / L = ${p.dh} / ${p.L}</span><br>` +
+    `<span class="result">i = ${vals.i.toFixed(4)}</span><br><br>` +
+    `<span class="step">v = k × i = ${p.k} × ${vals.i.toFixed(4)}</span><br>` +
+    `<span class="result">v = ${vals.v.toFixed(4)} m/day</span><br><br>` +
+    `<span class="step">vₛ = v / n = ${vals.v.toFixed(4)} / ${p.n.toFixed(2)}</span><br>` +
+    `<span class="danger">vₛ = ${vals.vs.toFixed(4)} m/day</span><br><br>` +
+    `<span class="step">Tracer time = L / vₛ</span><br>` +
+    `<span class="step">= ${p.L} / ${vals.vs.toFixed(3)}</span><br>` +
+    `<span class="highlight">= ${vals.tTracer.toFixed(1)} days</span>`;
+}
+
+function updateSpeedBars(vals) {
+  const maxV = Math.max(vals.v, vals.vs);
+  const vPct = (vals.v / maxV) * 100;
+  const vsPct = (vals.vs / maxV) * 100;
+  document.getElementById('vBar').style.width = vPct + '%';
+  document.getElementById('vsBar').style.width = vsPct + '%';
+  document.getElementById('vBarVal').textContent = vals.v.toFixed(3) + ' m/d';
+  document.getElementById('vsBarVal').textContent = vals.vs.toFixed(3) + ' m/d';
+}
+
+function updateInsight(p, vals) {
+  const ratio = (1 / p.n).toFixed(1);
+  document.getElementById('insightBox').innerHTML =
+    `<strong>Key Insight:</strong> Seepage velocity is always <strong>${ratio}×</strong> faster than Darcy velocity ` +
+    `(= 1/n = 1/${p.n.toFixed(2)}). The tracer moves at vₛ, not v — because water squeezes through only ` +
+    `<strong>${(p.n * 100).toFixed(0)}%</strong> of the cross-section (the pores), not the full area.`;
+}
+
+// --- Tracer animation ---
+function toggleTracer() {
+  tracerPlaying = !tracerPlaying;
+  document.getElementById('btnPlay').textContent = tracerPlaying ? '⏸ Pause' : '▶ Play';
+  document.getElementById('btnPlay').classList.toggle('active', tracerPlaying);
+
+  if (tracerPlaying) {
+    lastTime = 0;
+    animFrame = requestAnimationFrame(animate);
+  }
+}
+
+function resetTracer() {
+  tracerPlaying = false;
+  tracerProgress = 0;
+  document.getElementById('btnPlay').textContent = '▶ Play';
+  document.getElementById('btnPlay').classList.remove('active');
+  if (animFrame) cancelAnimationFrame(animFrame);
+  draw();
+}
+
+function animate(now) {
+  if (!tracerPlaying) return;
+
+  if (lastTime === 0) { lastTime = now; }
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+
+  const p = getParams();
+  const vals = computeValues(p);
+
+  // Speed of tracer animation: scaled so it completes in a reasonable time on screen
+  const animSpeed = 1 / Math.max(vals.tTracer * 0.03, 0.5); // scale for reasonable animation speed
+  tracerProgress += dt * animSpeed;
+
+  if (tracerProgress >= 1) {
+    tracerProgress = 1;
+    tracerPlaying = false;
+    document.getElementById('btnPlay').textContent = '▶ Play';
+    document.getElementById('btnPlay').classList.remove('active');
+  }
+
+  draw();
+
+  if (tracerPlaying) {
+    animFrame = requestAnimationFrame(animate);
+  }
+}
+
+// --- Update labels ---
+function updateLabels() {
+  const p = getParams();
+  document.getElementById('kVal').textContent = p.k.toFixed(2) + ' m/day';
+  document.getElementById('nVal').textContent = (p.n * 100).toFixed(0) + '%';
+  document.getElementById('lVal').textContent = p.L.toFixed(0) + ' m';
+  document.getElementById('dhVal').textContent = p.dh.toFixed(1) + ' m';
+}
+
+// --- Events ---
+document.querySelectorAll('input[type="range"]').forEach(el => {
+  el.addEventListener('input', () => {
+    updateLabels();
+    draw();
+  });
+});
+
+// Porosity slider regenerates grains to show visual change
+document.getElementById('nSlider').addEventListener('input', () => {
+  draw(); // grains scale with porosity inside draw()
+});
+
+window.addEventListener('resize', resize);
+updateLabels();
+resize();
+</script>
+</body>
+</html>
