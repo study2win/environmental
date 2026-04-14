@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PFR vs CMFR — Reactor Comparison Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06090d;--p1:#0c1117;--p2:#111820;--pb:#1a2535;--t:#c4d4de;--tm:#4a6272;--cy:#06b6d4;--gn:#10b981;--rd:#ef4444;--yl:#eab308;--or:#f97316;--pu:#a78bfa;--pfr:#06b6d4;--cmfr:#f97316}
+body{background:var(--bg);color:var(--t);font-family:'Sora',sans-serif;min-height:100vh}
+.app{max-width:1400px;margin:0 auto;padding:10px 12px}
+.hdr{text-align:center;margin-bottom:8px}
+.hdr h1{font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:-0.03em}
+.hdr .s{font-family:'Fira Code',monospace;font-size:0.68rem;color:var(--tm);margin-top:2px}
+
+/* Layout: controls left, two reactors right */
+.main{display:grid;grid-template-columns:230px 1fr;gap:10px}
+@media(max-width:960px){.main{grid-template-columns:1fr}}
+.pnl{background:var(--p1);border:1px solid var(--pb);border-radius:10px}
+
+/* Controls */
+.ctrl{padding:12px;display:flex;flex-direction:column;gap:11px;font-size:0.74rem}
+.cg{display:flex;flex-direction:column;gap:5px}
+.cgt{font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--tm);padding-bottom:3px;border-bottom:1px solid var(--pb)}
+.cr{display:flex;flex-direction:column;gap:2px}
+.cl{display:flex;justify-content:space-between}
+.cv{font-family:'Fira Code',monospace;font-size:0.66rem;color:var(--cy);font-weight:500}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:#1a2535;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cy);cursor:pointer}
+.br{display:flex;gap:5px}
+.btn{flex:1;padding:7px 4px;border:1px solid var(--pb);border-radius:5px;background:rgba(0,0,0,.3);color:var(--t);font-family:'Sora',sans-serif;font-size:0.72rem;font-weight:600;cursor:pointer;transition:.15s;text-align:center}
+.btn:hover{background:rgba(6,182,212,.1);border-color:var(--cy);color:#fff}
+.btn.on{background:rgba(6,182,212,.15);border-color:var(--cy);color:var(--cy)}
+.calc{background:rgba(0,0,0,.35);border-radius:7px;padding:9px;font-family:'Fira Code',monospace;font-size:0.62rem;line-height:1.7;color:var(--tm);white-space:pre-wrap}
+.calc .pf{color:var(--pfr);font-weight:600}
+.calc .cm{color:var(--cmfr);font-weight:600}
+.calc .w{color:#fff;font-weight:600}
+.eff-bars{display:flex;flex-direction:column;gap:5px}
+.eff-row{display:flex;align-items:center;gap:6px;font-size:0.66rem;font-family:'Fira Code',monospace}
+.eff-lbl{width:42px;text-align:right;font-size:0.6rem}
+.eff-track{flex:1;height:16px;background:rgba(0,0,0,.3);border-radius:4px;overflow:hidden;position:relative}
+.eff-fill{height:100%;border-radius:4px;transition:width .4s}
+.eff-val{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:0.6rem;color:#fff;font-weight:600}
+.eff-pct{width:40px;font-size:0.62rem;text-align:left}
+
+/* Reactor area */
+.reactors{display:flex;flex-direction:column;gap:8px}
+.r-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.r-row{grid-template-columns:1fr}}
+.r-box{position:relative;overflow:hidden}
+.r-label{padding:8px 12px;background:rgba(0,0,0,.25);border-bottom:1px solid var(--pb);display:flex;justify-content:space-between;align-items:center}
+.r-label h3{font-size:0.78rem;font-weight:700}
+.r-label .eq{font-family:'Fira Code',monospace;font-size:0.62rem;color:var(--tm)}
+canvas{display:block;width:100%}
+
+/* Mode tabs */
+.modes{display:flex;gap:0;border-bottom:1px solid var(--pb)}
+.mode-btn{flex:1;padding:8px;text-align:center;font-size:0.72rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--tm);transition:.15s;border-bottom:2px solid transparent}
+.mode-btn:hover{color:var(--t)}
+.mode-btn.active{color:var(--cy);border-bottom-color:var(--cy);background:rgba(6,182,212,.04)}
+.insight{padding:8px 10px;border-radius:7px;border:1px solid rgba(234,179,8,.18);background:rgba(234,179,8,.03);font-size:0.68rem;line-height:1.45;color:var(--yl)}
+.insight strong{color:#fff}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="hdr">
+<h1>Plug Flow Reactor vs Completely Mixed Flow Reactor</h1>
+<div class="s">First-Order Decay: -rA = kC | Side-by-Side Comparison</div>
+</div>
+
+<div class="main">
+<!-- Controls -->
+<div class="pnl ctrl">
+<div class="cg">
+<div class="cgt">Reactor Parameters</div>
+<div class="cr"><div class="cl">Influent C₀ <span class="cv" id="c0V">100 mg/L</span></div>
+<input type="range" id="c0S" min="10" max="200" step="5" value="100"></div>
+<div class="cr"><div class="cl">Volume V <span class="cv" id="vV">100 m³</span></div>
+<input type="range" id="vS" min="20" max="500" step="10" value="100"></div>
+<div class="cr"><div class="cl">Flow Rate Q <span class="cv" id="qV">50 m³/hr</span></div>
+<input type="range" id="qS" min="10" max="200" step="5" value="50"></div>
+<div class="cr"><div class="cl">Rate Constant k <span class="cv" id="kV">0.50 /hr</span></div>
+<input type="range" id="kS" min="0.05" max="2.0" step="0.05" value="0.5"></div>
+</div>
+
+<div class="cg">
+<div class="cgt">CMFR in Series</div>
+<div class="cr"><div class="cl">Number of CMFRs <span class="cv" id="nV">1</span></div>
+<input type="range" id="nS" min="1" max="10" step="1" value="1"></div>
+<div style="font-size:0.66rem;color:var(--tm);line-height:1.4">Same total volume V split into n equal CMFRs in series. As n→∞, approaches PFR.</div>
+</div>
+
+<div class="cg">
+<div class="cgt">Tracer Test</div>
+<div class="br">
+<button class="btn on" id="btnTracer" onclick="injectTracer()">💉 Inject Pulse</button>
+<button class="btn" onclick="resetTracer()">↺ Reset</button>
+</div>
+<div style="font-size:0.66rem;color:var(--tm);line-height:1.4">Inject a tracer pulse at t=0 and watch how each reactor responds at the outlet.</div>
+</div>
+
+<div class="cg">
+<div class="cgt">Calculations</div>
+<div class="calc" id="calcBox"></div>
+</div>
+
+<div class="cg">
+<div class="cgt">Removal Efficiency</div>
+<div class="eff-bars">
+<div class="eff-row">
+<span class="eff-lbl" style="color:var(--pfr)">PFR</span>
+<div class="eff-track"><div class="eff-fill" id="effPFR" style="background:var(--pfr);width:0%"></div><span class="eff-val" id="effPFRv">—</span></div>
+</div>
+<div class="eff-row">
+<span class="eff-lbl" style="color:var(--cmfr)">CMFR</span>
+<div class="eff-track"><div class="eff-fill" id="effCMFR" style="background:var(--cmfr);width:0%"></div><span class="eff-val" id="effCMFRv">—</span></div>
+</div>
+<div class="eff-row">
+<span class="eff-lbl" style="color:var(--pu)">n-CMFR</span>
+<div class="eff-track"><div class="eff-fill" id="effNCMFR" style="background:var(--pu);width:0%"></div><span class="eff-val" id="effNCMFRv">—</span></div>
+</div>
+</div>
+</div>
+
+<div class="cg">
+<div class="cgt">Key Insight</div>
+<div class="insight" id="insightBox"></div>
+</div>
+</div>
+
+<!-- Reactor Visualizations -->
+<div class="reactors">
+<!-- Mode selector -->
+<div class="pnl">
+<div class="modes">
+<div class="mode-btn active" onclick="setMode('steady')" id="mSteady">Steady State</div>
+<div class="mode-btn" onclick="setMode('tracer')" id="mTracer">Tracer Response</div>
+</div>
+</div>
+
+<!-- Reactor drawings -->
+<div class="r-row">
+<div class="pnl r-box">
+<div class="r-label">
+<h3 style="color:var(--pfr)">Plug Flow Reactor (PFR)</h3>
+<span class="eq">C = C₀·e<sup>-kτ(x/L)</sup></span>
+</div>
+<canvas id="cPFR" height="280"></canvas>
+</div>
+<div class="pnl r-box">
+<div class="r-label">
+<h3 style="color:var(--cmfr)">CMFR (n in series)</h3>
+<span class="eq" id="cmfrEq">C = C₀/(1+kτ)</span>
+</div>
+<canvas id="cCMFR" height="280"></canvas>
+</div>
+</div>
+
+<!-- Concentration profile / RTD curve -->
+<div class="pnl r-box">
+<div class="r-label">
+<h3 id="plotTitle" style="color:#fff">Concentration Profile Along Reactor</h3>
+<span class="eq" id="plotEq"></span>
+</div>
+<canvas id="cPlot" height="200"></canvas>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+var mode = 'steady'; // 'steady' or 'tracer'
+var tracerTime = -1; // -1 means no tracer active
+var tracerRunning = false;
+var lastT = 0;
+
+// Canvas refs
+var cPFR = document.getElementById('cPFR');
+var cCMFR = document.getElementById('cCMFR');
+var cPlot = document.getElementById('cPlot');
+var ctxP = cPFR.getContext('2d');
+var ctxC = cCMFR.getContext('2d');
+var ctxPl = cPlot.getContext('2d');
+
+function gp(){
+  return {
+    C0: +document.getElementById('c0S').value,
+    V: +document.getElementById('vS').value,
+    Q: +document.getElementById('qS').value,
+    k: +document.getElementById('kS').value,
+    n: +document.getElementById('nS').value,
+  };
+}
+
+function calc(p){
+  var tau = p.V / p.Q;
+  var cPfr = p.C0 * Math.exp(-p.k * tau);
+  var cCmfr = p.C0 / (1 + p.k * tau);
+  // n CMFRs in series, each with volume V/n, so tau_each = tau/n
+  var tauEach = tau / p.n;
+  var cNCmfr = p.C0 / Math.pow(1 + p.k * tauEach, p.n);
+  var effPfr = (1 - cPfr/p.C0) * 100;
+  var effCmfr = (1 - cCmfr/p.C0) * 100;
+  var effNCmfr = (1 - cNCmfr/p.C0) * 100;
+  return {tau:tau, cPfr:cPfr, cCmfr:cCmfr, cNCmfr:cNCmfr, effPfr:effPfr, effCmfr:effCmfr, effNCmfr:effNCmfr, tauEach:tauEach};
+}
+
+// === RESIZE ===
+function resizeCanvas(cv, h){
+  var w = cv.parentElement.clientWidth;
+  cv.width = w * 2;
+  cv.height = h * 2;
+  cv.style.height = h + 'px';
+  cv.getContext('2d').setTransform(2,0,0,2,0,0);
+}
+function resizeAll(){
+  resizeCanvas(cPFR, 280);
+  resizeCanvas(cCMFR, 280);
+  resizeCanvas(cPlot, 200);
+  drawAll();
+}
+
+// === COLORS ===
+function concColor(c, c0, alpha){
+  // Interpolate from dark blue (high conc) to near-transparent (low conc)
+  var frac = Math.max(0, Math.min(1, c / c0));
+  var r = Math.round(6 + (1-frac)*10);
+  var g = Math.round(40 + (1-frac)*60);
+  var b = Math.round(80 + (1-frac)*80);
+  return 'rgba('+r+','+g+','+b+','+(0.3 + frac*0.6).toFixed(2)+')';
+}
+
+function concColorBright(c, c0){
+  var frac = Math.max(0, Math.min(1, c / c0));
+  // High conc = deep blue, low = very light
+  var r = Math.round(10 + (1-frac)*200);
+  var g = Math.round(60 + (1-frac)*180);
+  var b = Math.round(140 + (1-frac)*100);
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+// === DRAW PFR ===
+function drawPFR(){
+  var p = gp();
+  var v = calc(p);
+  var W = cPFR.width/2;
+  var H = cPFR.height/2;
+  ctxP.clearRect(0,0,W,H);
+
+  var pad = 40;
+  var rX = pad + 30;
+  var rY = 50;
+  var rW = W - rX - pad - 20;
+  var rH = 120;
+
+  // Title
+  ctxP.fillStyle = '#fff';
+  ctxP.font = '600 10px Sora';
+  ctxP.textAlign = 'left';
+
+  // Inlet pipe
+  ctxP.fillStyle = concColorBright(p.C0, p.C0);
+  ctxP.fillRect(pad-10, rY+rH/2-8, rX-pad+12, 16);
+  ctxP.fillStyle = '#06b6d4';
+  ctxP.font = '500 9px Fira Code';
+  ctxP.textAlign = 'center';
+  ctxP.fillText('C₀='+p.C0, pad+10, rY+rH/2-14);
+
+  // Reactor tube — gradient fill
+  var numSlices = 60;
+  for(var i=0;i<numSlices;i++){
+    var frac = i/numSlices;
+    var cAtX = p.C0 * Math.exp(-p.k * v.tau * frac);
+    ctxP.fillStyle = concColorBright(cAtX, p.C0);
+    var sliceX = rX + frac * rW;
+    var sliceW = rW/numSlices + 1;
+    ctxP.fillRect(sliceX, rY, sliceW, rH);
+  }
+
+  // Reactor outline
+  ctxP.strokeStyle = '#06b6d4';
+  ctxP.lineWidth = 2;
+  ctxP.strokeRect(rX, rY, rW, rH);
+
+  // Flow arrows inside
+  ctxP.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctxP.lineWidth = 1;
+  for(var y=rY+20;y<rY+rH;y+=30){
+    ctxP.beginPath();
+    ctxP.moveTo(rX+15, y);
+    ctxP.lineTo(rX+rW-15, y);
+    ctxP.stroke();
+    // arrowhead
+    ctxP.beginPath();
+    ctxP.moveTo(rX+rW-15, y);
+    ctxP.lineTo(rX+rW-22, y-4);
+    ctxP.lineTo(rX+rW-22, y+4);
+    ctxP.fill();
+  }
+
+  // Outlet pipe
+  ctxP.fillStyle = concColorBright(v.cPfr, p.C0);
+  ctxP.fillRect(rX+rW-2, rY+rH/2-8, 30, 16);
+
+  // Outlet label
+  ctxP.fillStyle = '#06b6d4';
+  ctxP.font = '500 9px Fira Code';
+  ctxP.textAlign = 'left';
+  ctxP.fillText('C='+v.cPfr.toFixed(1), rX+rW+5, rY+rH/2-14);
+
+  // "PLUG" arrows showing no mixing
+  ctxP.fillStyle = 'rgba(6,182,212,0.15)';
+  ctxP.font = '700 10px Sora';
+  ctxP.textAlign = 'center';
+  ctxP.fillText('NO MIXING — fluid moves as a plug →', rX+rW/2, rY+rH+18);
+
+  // Concentration gradient bar below
+  var barY = rY+rH+28;
+  var barH = 12;
+  for(var i=0;i<numSlices;i++){
+    var frac = i/numSlices;
+    var cAtX = p.C0 * Math.exp(-p.k * v.tau * frac);
+    ctxP.fillStyle = concColorBright(cAtX, p.C0);
+    ctxP.fillRect(rX + frac*rW, barY, rW/numSlices+1, barH);
+  }
+  ctxP.strokeStyle = 'rgba(6,182,212,0.3)';
+  ctxP.lineWidth = 1;
+  ctxP.strokeRect(rX, barY, rW, barH);
+  ctxP.fillStyle = var_tm;
+  ctxP.font = '400 8px Fira Code';
+  ctxP.textAlign = 'left';
+  ctxP.fillText('High C', rX, barY+barH+12);
+  ctxP.textAlign = 'right';
+  ctxP.fillText('Low C', rX+rW, barY+barH+12);
+  ctxP.textAlign = 'center';
+  ctxP.fillText('Concentration gradient along length', rX+rW/2, barY+barH+24);
+
+  // Tracer mode overlay
+  if(mode==='tracer' && tracerTime >= 0){
+    drawPFRTracer(rX, rY, rW, rH);
+  }
+}
+
+var var_tm = '#4a6272';
+
+function drawPFRTracer(rX, rY, rW, rH){
+  var p = gp();
+  var v = calc(p);
+  // In PFR, tracer pulse exits at t = tau as a perfect spike
+  // Position of pulse front: x/L = t/tau
+  var pos = tracerTime / v.tau;
+  if(pos > 1.3) return;
+
+  var pulseX = rX + pos * rW;
+  var pulseW = rW * 0.03;
+
+  if(pos <= 1){
+    // Draw pulse band
+    ctxP.fillStyle = 'rgba(234,179,8,0.7)';
+    ctxP.fillRect(pulseX - pulseW/2, rY+2, pulseW, rH-4);
+    // Glow
+    var grd = ctxP.createRadialGradient(pulseX, rY+rH/2, 0, pulseX, rY+rH/2, rW*0.08);
+    grd.addColorStop(0, 'rgba(234,179,8,0.25)');
+    grd.addColorStop(1, 'rgba(234,179,8,0)');
+    ctxP.fillStyle = grd;
+    ctxP.fillRect(pulseX-rW*0.08, rY, rW*0.16, rH);
+  }
+
+  ctxP.fillStyle = '#eab308';
+  ctxP.font = '600 9px Fira Code';
+  ctxP.textAlign = 'center';
+  if(pos<=1) ctxP.fillText('Tracer pulse', pulseX, rY-6);
+  else ctxP.fillText('Exited at t=τ', rX+rW, rY-6);
+}
+
+// === DRAW CMFR ===
+function drawCMFR(){
+  var p = gp();
+  var v = calc(p);
+  var W = cCMFR.width/2;
+  var H = cCMFR.height/2;
+  ctxC.clearRect(0,0,W,H);
+
+  var n = p.n;
+
+  if(n === 1){
+    drawSingleCMFR(W, H, p, v);
+  } else {
+    drawSeriesCMFR(W, H, p, v, n);
+  }
+}
+
+function drawSingleCMFR(W, H, p, v){
+  var pad = 40;
+  var tX = pad+30, tY = 35, tW = W-tX-pad-20, tH = 130;
+
+  // The whole tank is at effluent concentration
+  ctxC.fillStyle = concColorBright(v.cCmfr, p.C0);
+  ctxC.fillRect(tX, tY, tW, tH);
+
+  // Stirrer
+  var cx = tX+tW/2, cy = tY+tH/2;
+  ctxC.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctxC.lineWidth = 2;
+  ctxC.beginPath();
+  ctxC.moveTo(cx, tY-5);
+  ctxC.lineTo(cx, cy);
+  ctxC.stroke();
+  // Blades
+  var bladeAngle = (Date.now()/500) % (Math.PI*2);
+  for(var b=0;b<4;b++){
+    var a = bladeAngle + b*Math.PI/2;
+    ctxC.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctxC.lineWidth = 3;
+    ctxC.beginPath();
+    ctxC.moveTo(cx, cy);
+    ctxC.lineTo(cx+Math.cos(a)*25, cy+Math.sin(a)*15);
+    ctxC.stroke();
+  }
+
+  // Tank outline
+  ctxC.strokeStyle = '#f97316';
+  ctxC.lineWidth = 2;
+  ctxC.strokeRect(tX, tY, tW, tH);
+
+  // Inlet pipe
+  ctxC.fillStyle = concColorBright(p.C0, p.C0);
+  ctxC.fillRect(pad-10, tY+25, tX-pad+12, 16);
+  ctxC.fillStyle = '#f97316';
+  ctxC.font = '500 9px Fira Code';
+  ctxC.textAlign = 'center';
+  ctxC.fillText('C₀='+p.C0, pad+10, tY+20);
+
+  // Outlet pipe
+  ctxC.fillStyle = concColorBright(v.cCmfr, p.C0);
+  ctxC.fillRect(tX+tW-2, tY+tH-40, 30, 16);
+  ctxC.fillStyle = '#f97316';
+  ctxC.font = '500 9px Fira Code';
+  ctxC.textAlign = 'left';
+  ctxC.fillText('C='+v.cCmfr.toFixed(1), tX+tW+5, tY+tH-46);
+
+  // Uniform concentration label
+  ctxC.fillStyle = 'rgba(249,115,22,0.2)';
+  ctxC.font = '700 11px Sora';
+  ctxC.textAlign = 'center';
+  ctxC.fillText('ENTIRE tank at effluent concentration', tX+tW/2, tY+tH+18);
+  ctxC.fillStyle = var_tm;
+  ctxC.font = '400 9px Fira Code';
+  ctxC.fillText('C_tank = C_out = '+v.cCmfr.toFixed(1)+' mg/L (uniform!)', tX+tW/2, tY+tH+34);
+
+  // Mixing arrows
+  ctxC.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctxC.lineWidth = 1;
+  var arrows = [[0.3,0.3,0.7,0.7],[0.7,0.3,0.3,0.7],[0.5,0.2,0.5,0.8],[0.2,0.5,0.8,0.5]];
+  for(var i=0;i<arrows.length;i++){
+    var a=arrows[i];
+    ctxC.beginPath();
+    ctxC.moveTo(tX+a[0]*tW, tY+a[1]*tH);
+    ctxC.lineTo(tX+a[2]*tW, tY+a[3]*tH);
+    ctxC.stroke();
+  }
+
+  // Tracer
+  if(mode==='tracer' && tracerTime>=0){
+    drawCMFRTracer(tX,tY,tW,tH,1);
+  }
+}
+
+function drawSeriesCMFR(W, H, p, v, n){
+  var pad = 25;
+  var totalW = W - 2*pad;
+  var gap = 8;
+  var tankW = (totalW - (n-1)*gap - 40) / n; // leave space for pipes
+  var tY = 40, tH = 110;
+
+  // Concentration at exit of each reactor
+  var concs = [p.C0];
+  for(var i=0;i<n;i++){
+    concs.push(concs[i] / (1 + p.k * v.tauEach));
+  }
+
+  for(var i=0;i<n;i++){
+    var tX = pad + 20 + i*(tankW+gap);
+    var cIn = concs[i];
+    var cOut = concs[i+1];
+
+    // Tank fill
+    ctxC.fillStyle = concColorBright(cOut, p.C0);
+    ctxC.fillRect(tX, tY, tankW, tH);
+
+    // Outline
+    ctxC.strokeStyle = i===n-1 ? '#a78bfa' : '#f97316';
+    ctxC.lineWidth = 1.5;
+    ctxC.strokeRect(tX, tY, tankW, tH);
+
+    // Stirrer (simplified)
+    var cx2 = tX+tankW/2, cy2 = tY+tH/2;
+    ctxC.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctxC.lineWidth = 1;
+    var ba2 = (Date.now()/500 + i) % (Math.PI*2);
+    for(var b=0;b<2;b++){
+      var aa = ba2 + b*Math.PI;
+      ctxC.beginPath();
+      ctxC.moveTo(cx2, cy2);
+      ctxC.lineTo(cx2+Math.cos(aa)*Math.min(12,tankW*0.35), cy2+Math.sin(aa)*8);
+      ctxC.stroke();
+    }
+
+    // Label
+    ctxC.fillStyle = var_tm;
+    ctxC.font = '500 8px Fira Code';
+    ctxC.textAlign = 'center';
+    ctxC.fillText(cOut.toFixed(1), tX+tankW/2, tY+tH+12);
+    ctxC.fillText('#'+(i+1), tX+tankW/2, tY-5);
+
+    // Connecting pipe
+    if(i<n-1){
+      ctxC.fillStyle = concColorBright(cOut, p.C0);
+      ctxC.fillRect(tX+tankW, tY+tH/2-4, gap, 8);
+    }
+  }
+
+  // Inlet
+  ctxC.fillStyle = concColorBright(p.C0, p.C0);
+  ctxC.fillRect(pad, tY+tH/2-4, 22, 8);
+  ctxC.fillStyle = '#f97316';
+  ctxC.font = '500 8px Fira Code';
+  ctxC.textAlign = 'left';
+  ctxC.fillText('C₀', pad, tY+tH/2-10);
+
+  // Outlet
+  var lastX = pad+20+(n-1)*(tankW+gap)+tankW;
+  ctxC.fillStyle = concColorBright(concs[n], p.C0);
+  ctxC.fillRect(lastX, tY+tH/2-4, 18, 8);
+  ctxC.fillStyle = '#a78bfa';
+  ctxC.font = '500 8px Fira Code';
+  ctxC.textAlign = 'left';
+  ctxC.fillText(concs[n].toFixed(1), lastX+2, tY+tH/2-10);
+
+  // Label
+  ctxC.fillStyle = 'rgba(167,139,250,0.2)';
+  ctxC.font = '600 9px Sora';
+  ctxC.textAlign = 'center';
+  ctxC.fillText(n+' CMFRs in series → approaches PFR as n increases', W/2, tY+tH+28);
+
+  // Tracer
+  if(mode==='tracer' && tracerTime>=0){
+    drawCMFRTracer(pad+20,tY,totalW-40,tH,n);
+  }
+}
+
+function drawCMFRTracer(tX,tY,tW,tH,n){
+  // CMFR tracer: E(t) = (1/tau)*e^(-t/tau) for single
+  // Show a yellow tint proportional to tracer concentration in tank
+  var p = gp();
+  var v = calc(p);
+
+  if(n===1){
+    // Concentration in tank at time t: C(t) = (M/V)*e^(-t/tau)
+    var cTracer = Math.exp(-tracerTime/v.tau);
+    ctxC.fillStyle = 'rgba(234,179,8,'+(cTracer*0.4).toFixed(3)+')';
+    ctxC.fillRect(tX, tY, tW, tH);
+    ctxC.fillStyle = '#eab308';
+    ctxC.font = '600 9px Fira Code';
+    ctxC.textAlign = 'center';
+    ctxC.fillText('Tracer: '+(cTracer*100).toFixed(1)+'%', tX+tW/2, tY-6);
+  }
+}
+
+// === DRAW PLOT ===
+function drawPlot(){
+  var p = gp();
+  var v = calc(p);
+  var W = cPlot.width/2;
+  var H = cPlot.height/2;
+  ctxPl.clearRect(0,0,W,H);
+
+  var pad = {l:55, r:20, t:15, b:35};
+  var pW = W-pad.l-pad.r;
+  var pH = H-pad.t-pad.b;
+
+  // Axes
+  ctxPl.strokeStyle = '#1a2535';
+  ctxPl.lineWidth = 1;
+  ctxPl.beginPath();
+  ctxPl.moveTo(pad.l, pad.t);
+  ctxPl.lineTo(pad.l, pad.t+pH);
+  ctxPl.lineTo(pad.l+pW, pad.t+pH);
+  ctxPl.stroke();
+
+  if(mode==='steady'){
+    drawSteadyPlot(p, v, pad, pW, pH);
+  } else {
+    drawTracerPlot(p, v, pad, pW, pH);
+  }
+}
+
+function drawSteadyPlot(p, v, pad, pW, pH){
+  // X axis: position along reactor (0 to L), or reactor number for CMFR series
+  // Y axis: concentration (0 to C0)
+  var W = cPlot.width/2;
+
+  // Y axis labels
+  ctxPl.fillStyle = var_tm;
+  ctxPl.font = '400 8px Fira Code';
+  ctxPl.textAlign = 'right';
+  for(var i=0;i<=4;i++){
+    var cVal = p.C0 * (1 - i/4);
+    var yy = pad.t + (i/4)*pH;
+    ctxPl.fillText(cVal.toFixed(0), pad.l-5, yy+3);
+    ctxPl.strokeStyle = '#111820';
+    ctxPl.beginPath();
+    ctxPl.moveTo(pad.l, yy);
+    ctxPl.lineTo(pad.l+pW, yy);
+    ctxPl.stroke();
+  }
+  ctxPl.textAlign = 'center';
+  ctxPl.fillText('C (mg/L)', pad.l-20, pad.t-4);
+
+  // X axis labels
+  ctxPl.fillText('Inlet', pad.l, pad.t+pH+14);
+  ctxPl.fillText('Outlet', pad.l+pW, pad.t+pH+14);
+  ctxPl.fillText('Position along reactor →', pad.l+pW/2, pad.t+pH+28);
+
+  // PFR curve: C = C0 * e^(-k*tau*x/L)
+  ctxPl.strokeStyle = '#06b6d4';
+  ctxPl.lineWidth = 2.5;
+  ctxPl.beginPath();
+  for(var i=0;i<=100;i++){
+    var frac = i/100;
+    var c = p.C0 * Math.exp(-p.k * v.tau * frac);
+    var xx = pad.l + frac*pW;
+    var yy = pad.t + (1 - c/p.C0)*pH;
+    if(i===0) ctxPl.moveTo(xx,yy);
+    else ctxPl.lineTo(xx,yy);
+  }
+  ctxPl.stroke();
+
+  // PFR label
+  ctxPl.fillStyle = '#06b6d4';
+  ctxPl.font = '600 9px Sora';
+  var pfrLabelY = pad.t + (1 - v.cPfr/p.C0)*pH;
+  ctxPl.textAlign = 'left';
+  ctxPl.fillText('PFR: '+v.cPfr.toFixed(1), pad.l+pW+3, pfrLabelY+3);
+
+  // Single CMFR: step function — inlet at C0, instant drop to C_out inside
+  ctxPl.strokeStyle = '#f97316';
+  ctxPl.lineWidth = 2.5;
+  ctxPl.setLineDash([6,3]);
+  var cmfrY = pad.t + (1 - v.cCmfr/p.C0)*pH;
+  ctxPl.beginPath();
+  // Drop at inlet
+  ctxPl.moveTo(pad.l, pad.t);
+  ctxPl.lineTo(pad.l, cmfrY);
+  ctxPl.lineTo(pad.l+pW, cmfrY);
+  ctxPl.stroke();
+  ctxPl.setLineDash([]);
+
+  ctxPl.fillStyle = '#f97316';
+  ctxPl.fillText('CMFR: '+v.cCmfr.toFixed(1), pad.l+pW+3, cmfrY+3);
+
+  // n-CMFR in series: step-wise decrease
+  if(p.n > 1){
+    ctxPl.strokeStyle = '#a78bfa';
+    ctxPl.lineWidth = 2;
+    ctxPl.beginPath();
+    var concs = [p.C0];
+    for(var i=0;i<p.n;i++) concs.push(concs[i]/(1+p.k*v.tauEach));
+
+    for(var i=0;i<p.n;i++){
+      var x1 = pad.l + (i/p.n)*pW;
+      var x2 = pad.l + ((i+1)/p.n)*pW;
+      var yC = pad.t + (1 - concs[i+1]/p.C0)*pH;
+      if(i===0){
+        ctxPl.moveTo(pad.l, pad.t);
+        ctxPl.lineTo(pad.l, pad.t + (1-concs[1]/p.C0)*pH);
+      }
+      ctxPl.lineTo(x2, yC);
+      if(i<p.n-1){
+        var yNext = pad.t + (1 - concs[i+2]/p.C0)*pH;
+        ctxPl.lineTo(x2, yNext);
+      }
+    }
+    ctxPl.stroke();
+
+    var ncY = pad.t + (1 - v.cNCmfr/p.C0)*pH;
+    ctxPl.fillStyle = '#a78bfa';
+    ctxPl.fillText(p.n+'-CMFR: '+v.cNCmfr.toFixed(1), pad.l+pW+3, ncY-8);
+  }
+}
+
+function drawTracerPlot(p, v, pad, pW, pH){
+  var W = cPlot.width/2;
+  // X axis: time (0 to 4*tau)
+  // Y axis: E(t) or C(t)/M
+  var maxTime = v.tau * 4;
+
+  // Y axis
+  ctxPl.fillStyle = var_tm;
+  ctxPl.font = '400 8px Fira Code';
+  ctxPl.textAlign = 'right';
+  ctxPl.fillText('E(t)', pad.l-10, pad.t+4);
+
+  // X axis
+  ctxPl.textAlign = 'center';
+  for(var i=0;i<=4;i++){
+    var tVal = i * v.tau;
+    var xx = pad.l + (i/4)*pW;
+    ctxPl.fillStyle = var_tm;
+    ctxPl.fillText((i===0?'0':i+'τ'), xx, pad.t+pH+14);
+    ctxPl.strokeStyle = '#111820';
+    ctxPl.beginPath();
+    ctxPl.moveTo(xx, pad.t);
+    ctxPl.lineTo(xx, pad.t+pH);
+    ctxPl.stroke();
+  }
+  ctxPl.fillText('Time →', pad.l+pW/2, pad.t+pH+28);
+
+  // PFR E(t): delta function at t=tau (impulse)
+  var tauX = pad.l + (1/4)*pW;
+  ctxPl.strokeStyle = '#06b6d4';
+  ctxPl.lineWidth = 3;
+  ctxPl.beginPath();
+  ctxPl.moveTo(tauX, pad.t+pH);
+  ctxPl.lineTo(tauX, pad.t+5);
+  ctxPl.stroke();
+  // Arrow at top
+  ctxPl.fillStyle = '#06b6d4';
+  ctxPl.beginPath();
+  ctxPl.moveTo(tauX-5, pad.t+12);
+  ctxPl.lineTo(tauX+5, pad.t+12);
+  ctxPl.lineTo(tauX, pad.t+3);
+  ctxPl.fill();
+  ctxPl.font = '600 9px Sora';
+  ctxPl.textAlign = 'left';
+  ctxPl.fillText('PFR: δ(t-τ)', tauX+8, pad.t+12);
+
+  // CMFR E(t) = (1/tau)*e^(-t/tau)
+  var maxE = 1/v.tau;
+  ctxPl.strokeStyle = '#f97316';
+  ctxPl.lineWidth = 2.5;
+  ctxPl.beginPath();
+  for(var i=0;i<=200;i++){
+    var t = (i/200)*maxTime;
+    var et = (1/v.tau)*Math.exp(-t/v.tau);
+    var xx = pad.l + (t/maxTime)*pW;
+    var yy = pad.t + pH - (et/maxE)*pH*0.9;
+    if(i===0) ctxPl.moveTo(xx,yy);
+    else ctxPl.lineTo(xx,yy);
+  }
+  ctxPl.stroke();
+  ctxPl.fillStyle = '#f97316';
+  ctxPl.font = '600 9px Sora';
+  ctxPl.fillText('CMFR: (1/τ)e^(-t/τ)', pad.l+pW*0.4, pad.t+pH*0.3);
+
+  // n-CMFR E(t) = [n/tau * (nt/tau)^(n-1) / (n-1)!] * e^(-nt/tau)
+  if(p.n > 1){
+    ctxPl.strokeStyle = '#a78bfa';
+    ctxPl.lineWidth = 2;
+    ctxPl.beginPath();
+    var factNm1 = factorial(p.n-1);
+    for(var i=0;i<=200;i++){
+      var t = (i/200)*maxTime;
+      var nt = p.n*t/v.tau;
+      var et = (p.n/v.tau)*Math.pow(nt, p.n-1)/factNm1 * Math.exp(-nt);
+      var xx = pad.l + (t/maxTime)*pW;
+      var yy = pad.t + pH - (et/maxE)*pH*0.9;
+      yy = Math.max(pad.t, yy);
+      if(i===0) ctxPl.moveTo(xx,yy);
+      else ctxPl.lineTo(xx,yy);
+    }
+    ctxPl.stroke();
+    ctxPl.fillStyle = '#a78bfa';
+    ctxPl.fillText(p.n+'-CMFR', pad.l+pW*0.55, pad.t+pH*0.15);
+  }
+
+  // Current time marker
+  if(tracerTime >= 0 && tracerTime < maxTime){
+    var tx = pad.l + (tracerTime/maxTime)*pW;
+    ctxPl.strokeStyle = 'rgba(234,179,8,0.5)';
+    ctxPl.lineWidth = 1;
+    ctxPl.setLineDash([4,3]);
+    ctxPl.beginPath();
+    ctxPl.moveTo(tx, pad.t);
+    ctxPl.lineTo(tx, pad.t+pH);
+    ctxPl.stroke();
+    ctxPl.setLineDash([]);
+    ctxPl.fillStyle = '#eab308';
+    ctxPl.font = '500 8px Fira Code';
+    ctxPl.textAlign = 'center';
+    ctxPl.fillText('t='+(tracerTime).toFixed(1)+'hr', tx, pad.t-3);
+  }
+}
+
+function factorial(n){
+  if(n<=1)return 1;
+  var r=1;for(var i=2;i<=n;i++)r*=i;
+  return r;
+}
+
+// === CALCULATIONS UPDATE ===
+function updateCalc(){
+  var p = gp();
+  var v = calc(p);
+  document.getElementById('calcBox').innerHTML =
+    '<span class="w">τ = V/Q = '+p.V+'/'+p.Q+'</span>\n' +
+    '  = <span class="w">'+v.tau.toFixed(2)+' hr</span>\n\n' +
+    '<span class="pf">PFR:</span> C = C₀·e^(-kτ)\n' +
+    '  = '+p.C0+'·e^(-'+p.k+'×'+v.tau.toFixed(2)+')\n' +
+    '  = <span class="pf">'+v.cPfr.toFixed(2)+' mg/L</span>\n\n' +
+    '<span class="cm">CMFR:</span> C = C₀/(1+kτ)\n' +
+    '  = '+p.C0+'/(1+'+p.k+'×'+v.tau.toFixed(2)+')\n' +
+    '  = <span class="cm">'+v.cCmfr.toFixed(2)+' mg/L</span>\n\n' +
+    (p.n>1 ? (p.n+'-CMFR: C = C₀/(1+kτ/n)ⁿ\n  = <span class="cm">'+v.cNCmfr.toFixed(2)+' mg/L</span>\n') : '');
+
+  // Efficiency bars
+  document.getElementById('effPFR').style.width = v.effPfr.toFixed(1)+'%';
+  document.getElementById('effPFRv').textContent = v.effPfr.toFixed(1)+'%';
+  document.getElementById('effCMFR').style.width = v.effCmfr.toFixed(1)+'%';
+  document.getElementById('effCMFRv').textContent = v.effCmfr.toFixed(1)+'%';
+  document.getElementById('effNCMFR').style.width = v.effNCmfr.toFixed(1)+'%';
+  document.getElementById('effNCMFRv').textContent = v.effNCmfr.toFixed(1)+'%';
+
+  // CMFR equation
+  if(p.n>1) document.getElementById('cmfrEq').textContent = 'C = C₀/(1+kτ/n)^n';
+  else document.getElementById('cmfrEq').textContent = 'C = C₀/(1+kτ)';
+
+  // Insight
+  var diff = v.effPfr - v.effCmfr;
+  document.getElementById('insightBox').innerHTML =
+    '<strong>PFR is always more efficient</strong> than a single CMFR for the same volume and k.' +
+    ' Here, PFR removes <strong>'+diff.toFixed(1)+'%</strong> more.' +
+    (p.n>1 ? '<br><br>With <strong>'+p.n+' CMFRs</strong> in series, removal improves to <strong>'+v.effNCmfr.toFixed(1)+'%</strong> (closer to PFR\'s '+v.effPfr.toFixed(1)+'%).' : '') +
+    '<br><br>Why? In CMFR, incoming high-C fluid is instantly diluted → reaction rate drops. In PFR, high-C fluid reacts at full rate first, then progressively slower.';
+}
+
+// === MODE ===
+function setMode(m){
+  mode = m;
+  document.getElementById('mSteady').classList.toggle('active', m==='steady');
+  document.getElementById('mTracer').classList.toggle('active', m==='tracer');
+  document.getElementById('plotTitle').textContent = m==='steady' ? 'Concentration Profile Along Reactor' : 'Residence Time Distribution — E(t) Curve';
+  drawAll();
+}
+
+// === TRACER ===
+function injectTracer(){
+  tracerTime = 0;
+  tracerRunning = true;
+  setMode('tracer');
+}
+function resetTracer(){
+  tracerTime = -1;
+  tracerRunning = false;
+  drawAll();
+}
+
+// === LABELS ===
+function updateLabels(){
+  document.getElementById('c0V').textContent = document.getElementById('c0S').value+' mg/L';
+  document.getElementById('vV').textContent = document.getElementById('vS').value+' m³';
+  document.getElementById('qV').textContent = document.getElementById('qS').value+' m³/hr';
+  document.getElementById('kV').textContent = (+document.getElementById('kS').value).toFixed(2)+' /hr';
+  document.getElementById('nV').textContent = document.getElementById('nS').value;
+}
+
+// === EVENTS ===
+var sliders = document.querySelectorAll('input[type=range]');
+for(var i=0;i<sliders.length;i++){
+  sliders[i].addEventListener('input', function(){
+    updateLabels();
+    updateCalc();
+    drawAll();
+  });
+}
+
+// === DRAW ALL ===
+function drawAll(){
+  drawPFR();
+  drawCMFR();
+  drawPlot();
+}
+
+// === ANIMATION LOOP ===
+function animate(t){
+  requestAnimationFrame(animate);
+  var dt = Math.min((t-lastT)/1000, 0.05);
+  lastT = t;
+
+  if(tracerRunning && tracerTime>=0){
+    var p = gp();
+    var v = calc(p);
+    tracerTime += dt * v.tau * 0.3; // speed scaled to tau
+    if(tracerTime > v.tau*4){
+      tracerRunning = false;
+    }
+  }
+
+  drawAll();
+}
+
+// === INIT ===
+window.addEventListener('resize', resizeAll);
+resizeAll();
+updateLabels();
+updateCalc();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
