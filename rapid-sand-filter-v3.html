@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapid Sand Filter — Interactive Sectional View</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fefefe;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px 12px;min-height:100vh}
+.hdr{text-align:center;margin-bottom:16px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:26px;color:#1b2a4a;margin-bottom:2px}
+.hdr p{font-size:12px;color:#7a8599}
+.bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;justify-content:center}
+.pbtn{padding:8px 18px;border-radius:22px;border:1.5px solid #c8d0de;background:#fff;font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;color:#4a5568}
+.pbtn:hover{background:#f0f4f8;transform:translateY(-1px)}
+.pbtn.af{background:#dbeeff;border-color:#4a90d9;color:#1b4f8a}
+.pbtn.ab{background:#fff3dc;border-color:#d4a04a;color:#7a5a1a}
+.pbtn.am{background:#dcf5e8;border-color:#4aaa7a;color:#1a5a3a}
+.vp{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;justify-content:center}
+.vb{font-size:11px;font-weight:600;padding:4px 10px;border-radius:14px;display:flex;align-items:center;gap:4px}
+.vb.o{background:#d4edda;color:#1a5a2a;border:1px solid #a3d9b1}
+.vb.s{background:#fde2e2;color:#8a1a1a;border:1px solid #f5a3a3}
+.vb .d{width:6px;height:6px;border-radius:50%}
+.vb.o .d{background:#28a745}.vb.s .d{background:#dc3545}
+.is{font-size:13px;font-weight:500;padding:7px 18px;border-radius:18px;margin-bottom:12px;text-align:center;transition:all .3s}
+.is.f{background:#dbeeff;color:#1b4f8a}
+.is.b{background:#fff3dc;color:#7a5a1a}
+.is.m{background:#dcf5e8;color:#1a5a3a}
+.is.x{background:#f0f0f0;color:#666}
+.cf{background:#fff;border:1px solid #dde1e8;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.04);cursor:pointer}
+canvas{display:block}
+.tip{margin-top:10px;font-size:11px;color:#9aa3b3;text-align:center}
+.warn{font-size:12px;font-weight:600;padding:7px 16px;border-radius:8px;margin-bottom:10px;text-align:center;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;display:none;transition:all .3s;max-width:600px;align-self:center}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Rapid Sand Filter</h1>
+  <p>Interactive Sectional View · Click numbered valves to operate</p>
+</div>
+<div class="bar">
+  <button class="pbtn af" id="pb-f" onclick="preset('f')">Filtration</button>
+  <button class="pbtn" id="pb-b" onclick="preset('b')">Backwashing</button>
+  <button class="pbtn" id="pb-m" onclick="preset('m')">Maturation</button>
+</div>
+<div class="vp" id="vp"></div>
+<div class="is f" id="is">Filtration — Settled water percolates down through sand & gravel, exits as clean filtered water</div>
+<div class="warn" id="warn"></div>
+<div class="cf">
+  <canvas id="c" width="1060" height="740"></canvas>
+</div>
+<p class="tip">Click on any numbered valve circle to toggle it · Use preset buttons for standard configurations</p>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 1060, CH = 740;
+
+// STATE
+let V = {1:true, 2:false, 3:false, 4:true, 5:false, 6:false};
+let mode = 'f';
+let tick = 0;
+let waterDrops = [];
+let airBubs = [];
+
+// Pre-generate static textures
+let sandGrains = [];
+let gravelStones = [];
+let texturesGenerated = false;
+
+const vNames = {1:'Inlet',2:'Wash Out',3:'To Waste',4:'Filtered Out',5:'Air In',6:'Backwash In'};
+const modeMsg = {
+  f:'Filtration — Settled water percolates down through sand & gravel, exits as clean filtered water',
+  b:'Backwashing — Wash water + compressed air flow upward through bed, dirt collected by troughs',
+  m:'Maturation — Water flows down through filter, exits to waste until bed ripens',
+  x:'Custom valve configuration'
+};
+
+// ========== GEOMETRY ==========
+// Filter body (the main rectangular tank)
+const FX = 220, FY = 120, FW = 520, FH = 380; // FH = SUPER + SAND + GRAVEL + UNDER = 90+130+100+60
+// Layer thicknesses
+const SUPER = 90;   // supernatant water zone
+const SAND = 130;    // sand bed
+const GRAVEL = 100;  // gravel support
+const UNDER = 60;    // underdrain
+const SAND_EXPAND = 20; // max extra height during backwash
+let currentSandExpand = 0; // animated expansion (0 to SAND_EXPAND)
+let currentBackwashWaterH = 0; // animated dirty water rise (0 to max height)
+
+// Cascading fill animation state (when V1 is opened)
+let chamberFillLevel = 0;    // 0 to 1 — how full the inlet chamber is
+let troughFillLevel = 0;     // 0 to 1 — how full the trough is
+let supernatantFillLevel = 0; // 0 to 1 — how full the supernatant zone is
+let percolationStarted = false; // whether water particles should flow
+let dirtyChamberfill = 0;    // 0 to 1 — backwash dirty water in chamber (0 to 20%)
+
+// Inlet chamber (left of filter, same height, shared wall — water overflows over it)
+const IX = 120, IY = FY, IW = 95, IH = FH;
+const SHARED_WALL_TOP = FY + 20; // top of shared wall — water overflows here during filtration
+
+// Wash water storage tank (right side — proper rectangular tank)
+const TX = 860, TY = 50, TW = 90, TH = 180;
+
+// Air compressor (separated — further right with clear gap from tank)
+const AX = 990, AY = 50, AW = 40, AH = 32;
+
+// Valve positions
+const VP = {
+  1: {x:90, y:FY + 50},        // inlet pipe, left side
+  2: {x:260, y:FY + FH + 90},  // wash water gutter out, bottom
+  3: {x:370, y:FY + FH + 90},  // to waste, bottom
+  4: {x:480, y:FY + FH + 90},  // filtered out, bottom
+  6: {x:840, y:FY + FH + 45},  // backwash in — higher (under tank)
+  5: {x:920, y:FY + FH + 80},  // air in — lower (under compressor)
+};
+const VR = 15; // valve radius
+
+// ========== PRESETS ==========
+function preset(m){
+  mode = m;
+  if(m==='f') V={1:true,2:false,3:false,4:true,5:false,6:false};
+  if(m==='b') V={1:false,2:true,3:false,4:false,5:true,6:true};
+  if(m==='m') V={1:true,2:false,3:true,4:false,5:false,6:false};
+  waterDrops=[]; airBubs=[];
+  // Reset all animation states
+  chamberFillLevel = 0;
+  troughFillLevel = 0;
+  supernatantFillLevel = 0;
+  percolationStarted = false;
+  currentSandExpand = 0;
+  currentBackwashWaterH = 0;
+  dirtyChamberfill = 0;
+  // Don't call initParticles here — let cascading animation handle it
+  // Only init backwash particles immediately since backwash doesn't use cascading fill
+  if(m==='b') initParticles();
+  updateUI();
+}
+
+function detectMode(){
+  if(V[1]&&V[4]&&!V[2]&&!V[3]&&!V[5]&&!V[6]) return 'f';
+  if(!V[1]&&V[2]&&!V[3]&&!V[4]&&V[5]&&V[6]) return 'b';
+  if(V[1]&&!V[2]&&V[3]&&!V[4]&&!V[5]&&!V[6]) return 'm';
+  return 'x';
+}
+
+function updateUI(){
+  document.querySelectorAll('.pbtn').forEach(b=>b.className='pbtn');
+  const el = document.getElementById('pb-'+mode);
+  if(el){
+    if(mode==='f') el.classList.add('af');
+    if(mode==='b') el.classList.add('ab');
+    if(mode==='m') el.classList.add('am');
+  }
+  const is = document.getElementById('is');
+  is.textContent = modeMsg[mode] || modeMsg.x;
+  is.className = 'is '+ (mode||'x');
+
+  let h='';
+  for(let i=1;i<=6;i++){
+    const o=V[i];
+    h+=`<div class="vb ${o?'o':'s'}"><div class="d"></div>V${i} ${vNames[i]}: ${o?'OPEN':'SHUT'}</div>`;
+  }
+  document.getElementById('vp').innerHTML=h;
+}
+
+// ========== CONFLICT RULES ==========
+// Each valve maps to which valves it conflicts with
+const conflicts = {
+  1: [2, 5, 6],       // Inlet conflicts with Wash gutter, Air, Backwash
+  2: [1, 3, 4],       // Wash gutter conflicts with Inlet, To waste, Filtered out
+  3: [2, 4, 5, 6],    // To waste conflicts with Wash gutter, Filtered out, Air, Backwash
+  4: [2, 3, 5, 6],    // Filtered out conflicts with Wash gutter, To waste, Air, Backwash
+  5: [1, 3, 4],       // Air conflicts with Inlet, To waste, Filtered out
+  6: [1, 3, 4]        // Backwash conflicts with Inlet, To waste, Filtered out
+};
+
+let warnTimeout = null;
+let flashValve = null;
+let flashStart = 0;
+
+function showWarning(tryingToOpen, blockedBy){
+  const wEl = document.getElementById('warn');
+  const names = {1:'V1 Inlet',2:'V2 Wash Out',3:'V3 To Waste',4:'V4 Filtered Out',5:'V5 Air In',6:'V6 Backwash In'};
+  wEl.textContent = `Cannot open ${names[tryingToOpen]} — conflicts with ${names[blockedBy]} (opposing flow direction)`;
+  wEl.style.display = 'block';
+  if(warnTimeout) clearTimeout(warnTimeout);
+  warnTimeout = setTimeout(()=>{ wEl.style.display='none'; }, 3000);
+}
+
+function checkConflict(valveId){
+  // Only check conflicts when trying to OPEN a valve (not close)
+  if(V[valveId]) return null; // closing is always allowed
+  const myConflicts = conflicts[valveId];
+  for(let c of myConflicts){
+    if(V[c]) return c; // this valve is open and conflicts
+  }
+  return null; // no conflict
+}
+
+// ========== CLICK ==========
+canvas.addEventListener('click', e=>{
+  const r=canvas.getBoundingClientRect();
+  const sx=CW/r.width, sy=CH/r.height;
+  const mx=(e.clientX-r.left)*sx, my=(e.clientY-r.top)*sy;
+  for(let i=1;i<=6;i++){
+    const v=VP[i];
+    const dx=mx-v.x, dy=my-v.y;
+    if(dx*dx+dy*dy<(VR+6)*(VR+6)){
+      const blocker = checkConflict(i);
+      if(blocker !== null){
+        // Blocked — show warning and flash the valve
+        showWarning(i, blocker);
+        flashValve = i;
+        flashStart = tick;
+      } else {
+        // Allowed — toggle valve
+        V[i]=!V[i];
+        mode=detectMode();
+        
+        // Reset cascading fill when V1 is toggled
+        if(i === 1){
+          chamberFillLevel = 0;
+          troughFillLevel = 0;
+          supernatantFillLevel = 0;
+          percolationStarted = false;
+          waterDrops = [];
+        }
+        
+        // For backwash valves, reset backwash animations
+        if(i === 6){
+          currentSandExpand = 0;
+          currentBackwashWaterH = 0;
+        }
+
+        // Only init particles immediately for backwash (V6)
+        // For V1, particles are initiated by cascading animation
+        if(!V[1]){
+          waterDrops = [];
+          percolationStarted = false;
+        }
+        airBubs = [];
+        if(V[6]) initParticles(); // backwash particles start immediately
+        
+        updateUI();
+        document.getElementById('warn').style.display='none';
+      }
+      break;
+    }
+  }
+});
+
+// ========== STATIC TEXTURES ==========
+function generateTextures(){
+  if(texturesGenerated) return;
+  // Sand grains — small balls, roughly same size, densely packed, subtle
+  for(let i=0;i<500;i++){
+    sandGrains.push({
+      rx: Math.random(),
+      ry: Math.random(),
+      r: 2.5 + Math.random()*1.2,  // roughly same size (2.5-3.7px)
+      // Slight shape variation
+      squish: 0.85 + Math.random()*0.3,  // oval-ness
+      angle: Math.random()*Math.PI,
+      opacity: 0.18 + Math.random()*0.12,  // subtle
+      shade: Math.floor(160 + Math.random()*50)  // light sandy tones
+    });
+  }
+  // Gravel stones — bigger, irregular, subtle
+  for(let i=0;i<80;i++){
+    gravelStones.push({
+      rx: Math.random(),
+      ry: Math.random(),
+      rw: 8 + Math.random()*7,   // 8-15px wide
+      rh: 6 + Math.random()*5,   // 6-11px tall
+      angle: Math.random()*Math.PI,
+      shade: Math.floor(130 + Math.random()*60),  // light greys
+      opacity: 0.2 + Math.random()*0.12,  // subtle
+      strokeAlpha: 0.1 + Math.random()*0.1
+    });
+  }
+  texturesGenerated = true;
+}
+
+// ========== DRAWING HELPERS ==========
+function pipe(pts, active, thickness, customColor){
+  const t = thickness || 6;
+  const activeColor = customColor || '#2674b8';
+  const activeHighlight = customColor ? lightenColor(customColor) : '#8ec5ee';
+  cx.beginPath();
+  cx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1;i<pts.length;i++) cx.lineTo(pts[i][0], pts[i][1]);
+  cx.strokeStyle = active ? activeColor : '#5a5a6a';
+  cx.lineWidth = active ? t+1 : t;
+  cx.stroke();
+  if(active){
+    cx.beginPath();
+    cx.moveTo(pts[0][0], pts[0][1]);
+    for(let i=1;i<pts.length;i++) cx.lineTo(pts[i][0], pts[i][1]);
+    cx.strokeStyle = activeHighlight;
+    cx.lineWidth = t-2 > 0 ? t-2 : 1;
+    cx.stroke();
+  }
+}
+
+function lightenColor(hex){
+  // Simple lighten for brownish pipe highlight
+  if(hex === '#8a6a30') return '#c4a060';
+  return '#8ec5ee';
+}
+
+function drawValve(id){
+  const v = VP[id];
+  const isOpen = V[id];
+
+  // Check if this valve is currently flashing (blocked click)
+  const isFlashing = (flashValve === id) && (tick - flashStart < 40);
+  const flashPhase = isFlashing ? Math.sin((tick - flashStart) * 0.4) : 0;
+
+  // Flash glow ring when blocked
+  if(isFlashing){
+    cx.beginPath();
+    cx.arc(v.x, v.y, VR+6, 0, Math.PI*2);
+    cx.fillStyle = `rgba(231,76,60,${0.3 * Math.abs(flashPhase)})`;
+    cx.fill();
+  }
+
+  // Shadow
+  cx.beginPath();
+  cx.arc(v.x, v.y+2, VR+1, 0, Math.PI*2);
+  cx.fillStyle='rgba(0,0,0,0.08)';
+  cx.fill();
+  // Body
+  cx.beginPath();
+  cx.arc(v.x, v.y, VR, 0, Math.PI*2);
+  const g = cx.createRadialGradient(v.x-3,v.y-3,2,v.x,v.y,VR);
+  if(isOpen){ g.addColorStop(0,'#6fe09a'); g.addColorStop(1,'#2ecc71'); }
+  else { g.addColorStop(0,'#f28080'); g.addColorStop(1,'#e74c3c'); }
+  cx.fillStyle=g;
+  cx.fill();
+  cx.strokeStyle = isOpen?'#1a9a52':'#a93226';
+  cx.lineWidth=2.5;
+  cx.stroke();
+  // Number
+  cx.fillStyle='#fff';
+  cx.font='bold 13px "Outfit"';
+  cx.textAlign='center';
+  cx.textBaseline='middle';
+  cx.fillText(id, v.x, v.y+1);
+  cx.textBaseline='alphabetic';
+}
+
+function label(text, x, y, size, color, align){
+  cx.fillStyle = color||'#2a3a5a';
+  cx.font = (size||11)+'px "Outfit"';
+  cx.textAlign = align||'center';
+  cx.fillText(text, x, y);
+}
+
+// ========== MAIN DRAWING ==========
+
+function drawFilterBody(){
+  const isBackwash = V[6]; // backwash triggers on V6 alone
+  const sandExpand = currentSandExpand; // animated value
+  const wallT = 14;
+
+  // Concrete walls (open top — no top slab)
+  // LEFT WALL is the SHARED WALL between inlet chamber and filter
+  // It has an OPENING at the trough level so water can flow from inlet chamber into the trough
+  const sharedWallH = FH - 15; // shared wall doesn't reach full height — overflow point
+  const overflowY = FY + (FH - sharedWallH);
+  const troughGapTop = FY + 35;      // where trough starts
+  const troughGapBottom = FY + 35 + 18; // where trough ends (troughTopY + troughH)
+
+  // Shared wall — UPPER part (from overflow point down to trough top)
+  cx.fillStyle='#c8c2b6';
+  cx.fillRect(FX-wallT, overflowY, wallT, troughGapTop - overflowY);
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=2;
+  cx.strokeRect(FX-wallT, overflowY, wallT, troughGapTop - overflowY);
+
+  // Shared wall — LOWER part (from trough bottom down to filter bottom + slab)
+  cx.fillStyle='#c8c2b6';
+  cx.fillRect(FX-wallT, troughGapBottom, wallT, FY + FH + wallT - troughGapBottom);
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=2;
+  cx.strokeRect(FX-wallT, troughGapBottom, wallT, FY + FH + wallT - troughGapBottom);
+
+  // Opening indicator — small highlight to show the gap
+  cx.fillStyle = 'rgba(91,163,230,0.2)';
+  cx.fillRect(FX-wallT, troughGapTop, wallT, troughGapBottom - troughGapTop);
+
+  // Overflow lip label
+  cx.strokeStyle='#4a8ac0';
+  cx.lineWidth=1;
+  cx.setLineDash([3,2]);
+  cx.beginPath();
+  cx.moveTo(FX-wallT-5, overflowY);
+  cx.lineTo(FX+10, overflowY);
+  cx.stroke();
+  cx.setLineDash([]);
+
+  // Right wall (full height)
+  cx.fillStyle='#c8c2b6';
+  cx.fillRect(FX+FW, FY, wallT, FH+wallT);
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=2;
+  cx.strokeRect(FX+FW, FY, wallT, FH+wallT);
+
+  // Bottom slab (extends under inlet chamber too)
+  cx.fillStyle='#c8c2b6';
+  cx.fillRect(IX-10, FY+FH, FW+wallT*2 + (FX-IX) + 10, wallT);
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=2;
+  cx.strokeRect(IX-10, FY+FH, FW+wallT*2 + (FX-IX) + 10, wallT);
+
+  let y = FY;
+
+  // ---- WASH WATER TROUGHS geometry (needed for water level calc) ----
+  const troughCount = 4;
+  const troughW = 55;
+  const tGap = (FW - troughCount*troughW)/(troughCount+1);
+  const troughTopY = y + 35;  // top rim of troughs
+  const troughBottomY = troughTopY + 30; // bottom of V-shape
+
+  // ---- SUPERNATANT WATER ----
+  const hasFlow = V[1] || V[6];
+
+  if(hasFlow){
+    let waterTopY, waterColor, waterAlpha;
+    const waterBottomY = FY + SUPER;
+
+    if(isBackwash){
+      // Backwash: dirty water rises gradually from sand surface upward
+      const maxWaterH = waterBottomY - troughTopY;
+      const actualWaterH = Math.min(currentBackwashWaterH, maxWaterH);
+      waterTopY = waterBottomY - actualWaterH;
+      waterColor = 'rgba(186,144,80,';
+      waterAlpha = 0.4;
+    } else {
+      // Filtration: water only appears after trough has filled (cascading)
+      if(supernatantFillLevel < 0.01) {
+        // Not enough water yet — skip drawing
+        waterTopY = waterBottomY;
+        waterColor = 'rgba(91,163,230,';
+        waterAlpha = 0;
+      } else {
+        // Water fills from sand surface upward
+        const maxFillH = SUPER - 15; // up to freeboard
+        const currentFillH = maxFillH * supernatantFillLevel;
+        waterTopY = waterBottomY - currentFillH;
+        waterColor = 'rgba(91,163,230,';
+        waterAlpha = 0.35;
+      }
+    }
+
+    // Only draw if there's meaningful height
+    const minVisible = isBackwash ? 15 : 5;
+    if(waterBottomY - waterTopY > minVisible){
+      cx.fillStyle = waterColor + waterAlpha + ')';
+      cx.fillRect(FX, waterTopY, FW, waterBottomY - waterTopY);
+
+      // Water level dashed line
+      cx.setLineDash([6,4]);
+      cx.strokeStyle = isBackwash ? '#b08040' : '#4a8ac0';
+      cx.lineWidth = 1.2;
+      cx.beginPath();
+      cx.moveTo(FX+5, waterTopY);
+      cx.lineTo(FX+FW-5, waterTopY);
+      cx.stroke();
+      cx.setLineDash([]);
+
+      const wlLabel = isBackwash ? 'Water level (backwash)' : 'Water level (filtering)';
+      if(isBackwash && currentBackwashWaterH > 10){
+        label(wlLabel, FX+FW-130, waterTopY-6, 12, '#9a7030');
+      } else if(!isBackwash && supernatantFillLevel > 0.5){
+        label(wlLabel, FX+FW/2, waterTopY-6, 12, '#4a7aa0');
+      }
+
+      // Freeboard indicator (only during filtration, when mostly filled)
+      if(!isBackwash && supernatantFillLevel > 0.8){
+        const freeboardH = waterTopY - FY;
+        if(freeboardH > 25){
+          cx.strokeStyle='#aaa'; cx.lineWidth=0.8; cx.setLineDash([3,2]);
+          const fbx = FX+FW-25;
+          cx.beginPath(); cx.moveTo(fbx, FY+3); cx.lineTo(fbx, waterTopY-3); cx.stroke();
+          cx.setLineDash([]);
+          cx.fillStyle='#999';
+          cx.beginPath(); cx.moveTo(fbx-3,FY+7); cx.lineTo(fbx,FY+3); cx.lineTo(fbx+3,FY+7); cx.fill();
+          cx.beginPath(); cx.moveTo(fbx-3,waterTopY-7); cx.lineTo(fbx,waterTopY-3); cx.lineTo(fbx+3,waterTopY-7); cx.fill();
+          label('Freeboard', fbx, FY+(freeboardH/2)+4, 11, '#999');
+        }
+      }
+    }
+  }
+
+  // ---- WASH WATER TROUGH (longitudinal section — wall to wall) ----
+  const troughH = 18;
+
+  // Spans from left wall (shared wall with inlet chamber) to right wall
+  cx.fillStyle='#a0aec0';
+  cx.fillRect(FX, troughTopY, FW, troughH);
+  cx.strokeStyle='#5a6a7a';
+  cx.lineWidth=1.5;
+  cx.strokeRect(FX, troughTopY, FW, troughH);
+
+  // Water inside trough
+  if(isBackwash){
+    // During backwash, only show water in trough once it has risen to trough level
+    if(currentBackwashWaterH > (SUPER - 35 - 10)){
+      const troughWaterH = troughH - 5;
+      cx.fillStyle = 'rgba(186,144,80,0.55)';
+      cx.fillRect(FX+2, troughTopY + (troughH - troughWaterH), FW-4, troughWaterH);
+    }
+  } else if(troughFillLevel > 0.01){
+    // Filtration: trough fills gradually after chamber overflows
+    const troughWaterH = (troughH - 5) * troughFillLevel;
+    cx.fillStyle = 'rgba(91,163,230,0.4)';
+    cx.fillRect(FX+2, troughTopY + troughH - troughWaterH - 2, FW-4, troughWaterH);
+  }
+  label('Wash Water Trough', FX+FW/2, troughTopY-7, 12, '#4a5a7a');
+
+  y = FY + SUPER;
+
+  // ---- SAND BED (STATIC) ----
+  const sandTop = y - sandExpand;
+  const sandH = SAND + sandExpand;
+  const sandGrd = cx.createLinearGradient(0, sandTop, 0, sandTop+sandH);
+  sandGrd.addColorStop(0, isBackwash ? '#e8d8a0' : '#e0cc90');
+  sandGrd.addColorStop(0.5, '#d8c080');
+  sandGrd.addColorStop(1, '#c8b068');
+  cx.fillStyle = sandGrd;
+  cx.fillRect(FX, sandTop, FW, sandH);
+
+  // Static sand grains — subtle small balls
+  sandGrains.forEach(g => {
+    const gx = FX + 4 + g.rx * (FW-8);
+    const gy = sandTop + 4 + g.ry * (sandH-8);
+    cx.save();
+    cx.translate(gx, gy);
+    cx.rotate(g.angle);
+    cx.beginPath();
+    cx.ellipse(0, 0, g.r, g.r * g.squish, 0, 0, Math.PI*2);
+    cx.fillStyle = `rgba(${g.shade},${g.shade-20},${g.shade-50},${g.opacity})`;
+    cx.fill();
+    cx.strokeStyle = `rgba(${g.shade-40},${g.shade-60},${g.shade-80},${g.opacity * 0.4})`;
+    cx.lineWidth = 0.4;
+    cx.stroke();
+    cx.restore();
+  });
+
+  label('Sand', FX+FW/2, sandTop+sandH/2+5, 18, '#6a5020', 'center');
+  if(isBackwash && sandExpand > 5){
+    label('(Expanded Bed)', FX+FW/2, sandTop+sandH/2+24, 12, '#8a7040');
+  }
+
+  y = FY + SUPER + SAND;
+
+  // ---- GRAVEL (STATIC) ----
+  const gravelGrd = cx.createLinearGradient(0, y, 0, y+GRAVEL);
+  gravelGrd.addColorStop(0, '#b8b8b8');
+  gravelGrd.addColorStop(0.5, '#a8a8a8');
+  gravelGrd.addColorStop(1, '#989898');
+  cx.fillStyle = gravelGrd;
+  cx.fillRect(FX, y, FW, GRAVEL);
+
+  // Static gravel stones — bigger subtle shapes
+  gravelStones.forEach(s => {
+    const sx = FX + 10 + s.rx * (FW-20);
+    const sy = y + 8 + s.ry * (GRAVEL-16);
+    cx.save();
+    cx.translate(sx, sy);
+    cx.rotate(s.angle);
+    cx.beginPath();
+    cx.ellipse(0, 0, s.rw/2, s.rh/2, 0, 0, Math.PI*2);
+    cx.fillStyle = `rgba(${s.shade+30},${s.shade+20},${s.shade+10},${s.opacity})`;
+    cx.fill();
+    cx.strokeStyle = `rgba(80,80,80,${s.strokeAlpha})`;
+    cx.lineWidth = 0.5;
+    cx.stroke();
+    cx.restore();
+  });
+
+  label('Gravel in Layers', FX+FW/2, y+GRAVEL/2+5, 17, '#3a3a3a');
+
+  y += GRAVEL;
+
+  // ---- UNDERDRAINAGE (clean simple zone) ----
+  const underGrd = cx.createLinearGradient(0, y, 0, y+UNDER);
+  underGrd.addColorStop(0, '#c4bfb4');
+  underGrd.addColorStop(0.5, '#b8b3a6');
+  underGrd.addColorStop(1, '#aca79a');
+  cx.fillStyle = underGrd;
+  cx.fillRect(FX, y, FW, UNDER);
+
+  // Subtle horizontal lines to suggest drainage channels
+  cx.strokeStyle = 'rgba(80,75,65,0.12)';
+  cx.lineWidth = 1;
+  for(let i = 0; i < 5; i++){
+    const ly = y + 8 + i * ((UNDER-16)/4);
+    cx.beginPath();
+    cx.moveTo(FX+10, ly);
+    cx.lineTo(FX+FW-10, ly);
+    cx.stroke();
+  }
+
+  label('Underdrainage', FX+FW/2, y+UNDER/2+5, 16, '#5a5550');
+
+  // Layer separator lines (dashed)
+  cx.strokeStyle='#9a9a9a';
+  cx.lineWidth=0.8;
+  cx.setLineDash([4,3]);
+  [SUPER, SUPER+SAND, SUPER+SAND+GRAVEL].forEach(off=>{
+    cx.beginPath();
+    cx.moveTo(FX, FY+off);
+    cx.lineTo(FX+FW, FY+off);
+    cx.stroke();
+  });
+  cx.setLineDash([]);
+}
+
+function drawInletChamber(){
+  const isBackwash = V[6] && V[2];
+  const wallT = 14;
+
+  // Inlet chamber — same height as filter, OPEN TOP (no top wall)
+  // Left outer wall of inlet chamber
+  cx.fillStyle='#c8c2b6';
+  cx.fillRect(IX-10, FY, 10, FH);
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=2;
+  cx.strokeRect(IX-10, FY, 10, FH);
+
+  // Chamber interior background
+  cx.fillStyle='#e0dcd4';
+  cx.fillRect(IX, FY, IW, FH);
+
+  // Animated water fill in inlet chamber
+  if(chamberFillLevel > 0.01){
+    // Water rises from bottom of chamber upward (filtration/maturation)
+    const maxWaterH = FH - 8;
+    const currentWaterH = maxWaterH * chamberFillLevel;
+    const chamberWaterTop = FY + FH - currentWaterH;
+    cx.fillStyle='rgba(91,163,230,0.35)';
+    cx.fillRect(IX+1, chamberWaterTop, IW-2, currentWaterH - 1);
+  }
+
+  // Backwash: dirty water fills chamber gradually from bottom after trough fills
+  const isBackwashActive = V[6];
+  const troughFull = currentBackwashWaterH > (SUPER - 35 - 10);
+  if(isBackwashActive && troughFull && chamberFillLevel < 0.01 && dirtyChamberfill > 0.01){
+    const maxDirtyH = FH * 0.2;
+    const currentDirtyH = maxDirtyH * dirtyChamberfill;
+    const waterSurfaceY = FY + FH - currentDirtyH;
+
+    // Draw turbulent wavy surface
+    cx.beginPath();
+    cx.moveTo(IX+1, FY + FH - 1);
+    cx.lineTo(IX+1, waterSurfaceY);
+    // Wavy top surface — overlapping sine waves for turbulence
+    for(let px = 0; px <= IW - 2; px++){
+      const wave1 = Math.sin((px * 0.15) + tick * 0.08) * 2.5;
+      const wave2 = Math.sin((px * 0.25) + tick * 0.12 + 1.5) * 1.5;
+      const wave3 = Math.sin((px * 0.4) + tick * 0.18 + 3.0) * 0.8;
+      const wy = waterSurfaceY + wave1 + wave2 + wave3;
+      cx.lineTo(IX + 1 + px, wy);
+    }
+    cx.lineTo(IX + IW - 1, FY + FH - 1);
+    cx.closePath();
+    cx.fillStyle='rgba(186,144,80,0.4)';
+    cx.fill();
+
+    // Subtle surface highlights for extra turbulence feel
+    cx.beginPath();
+    for(let px = 0; px <= IW - 2; px++){
+      const wave1 = Math.sin((px * 0.15) + tick * 0.08) * 2.5;
+      const wave2 = Math.sin((px * 0.25) + tick * 0.12 + 1.5) * 1.5;
+      const wave3 = Math.sin((px * 0.4) + tick * 0.18 + 3.0) * 0.8;
+      const wy = waterSurfaceY + wave1 + wave2 + wave3;
+      if(px === 0) cx.moveTo(IX + 1 + px, wy);
+      else cx.lineTo(IX + 1 + px, wy);
+    }
+    cx.strokeStyle='rgba(160,120,50,0.4)';
+    cx.lineWidth=1;
+    cx.stroke();
+
+    // Reverse arrows — only show when there's enough fill
+    if(dirtyChamberfill > 0.3){
+      const arrowAlpha = 0.4 + 0.2 * Math.sin(tick * 0.08);
+      cx.fillStyle = `rgba(160,120,50,${arrowAlpha})`;
+      const arrowY = FY + 35 + 9;
+      
+      for(let a = 0; a < 2; a++){
+        const ax = FX + 20 - a * 18;
+        cx.beginPath();
+        cx.moveTo(ax, arrowY - 4);
+        cx.lineTo(ax - 8, arrowY);
+        cx.lineTo(ax, arrowY + 4);
+        cx.fill();
+      }
+      for(let a = 0; a < 3; a++){
+        const ax = IX + IW - 5 - a * 18;
+        cx.beginPath();
+        cx.moveTo(ax, arrowY - 4);
+        cx.lineTo(ax - 8, arrowY);
+        cx.lineTo(ax, arrowY + 4);
+        cx.fill();
+      }
+
+      // Downward arrows inside inlet chamber — water falling toward drain
+      const chamberCenterX = IX + IW/2;
+      const downStartY = arrowY + 20; // below the trough opening
+      for(let a = 0; a < 3; a++){
+        const ay = downStartY + a * 25;
+        cx.beginPath();
+        cx.moveTo(chamberCenterX - 4, ay);
+        cx.lineTo(chamberCenterX + 4, ay);
+        cx.lineTo(chamberCenterX, ay + 8);
+        cx.fill();
+      }
+    }
+  }
+
+  // Overflow animation — only when chamber is nearly full
+  if(chamberFillLevel > 0.95){
+    const overflowY = FY + 15; // shared wall top
+    const spillAlpha = 0.25 + 0.1 * Math.sin(tick * 0.08);
+    cx.fillStyle = `rgba(91,163,230,${spillAlpha})`;
+    cx.beginPath();
+    cx.moveTo(IX+IW, overflowY - 3);
+    cx.quadraticCurveTo(IX+IW + wallT/2, overflowY - 10, IX+IW + wallT, overflowY + 5);
+    cx.lineTo(IX+IW + wallT, overflowY + 25);
+    cx.lineTo(IX+IW, overflowY + 25);
+    cx.closePath();
+    cx.fill();
+
+    // Flow arrows — only when overflowing
+    const arrowAlpha = 0.4 + 0.2 * Math.sin(tick * 0.08);
+    cx.fillStyle = `rgba(46,120,194,${arrowAlpha})`;
+    
+    // Horizontal arrows inside inlet chamber pointing right
+    const arrowY = FY + 35 + 9;
+    for(let a = 0; a < 4; a++){
+      const ax = IX + 15 + a * 18;
+      cx.beginPath();
+      cx.moveTo(ax, arrowY - 4);
+      cx.lineTo(ax + 8, arrowY);
+      cx.lineTo(ax, arrowY + 4);
+      cx.fill();
+    }
+
+    // Arrows going through the opening into the filter
+    for(let a = 0; a < 2; a++){
+      const ax = FX + 5 + a * 18;
+      cx.beginPath();
+      cx.moveTo(ax, arrowY - 4);
+      cx.lineTo(ax + 8, arrowY);
+      cx.lineTo(ax, arrowY + 4);
+      cx.fill();
+    }
+  }
+
+  // Chamber outline (no top line — open top)
+  cx.strokeStyle='#4a4a5a'; cx.lineWidth=1.5;
+  cx.beginPath();
+  cx.moveTo(IX, FY);
+  cx.lineTo(IX, FY+FH);
+  cx.lineTo(IX+IW, FY+FH);
+  cx.lineTo(IX+IW, FY);
+  cx.stroke();
+
+  // Label
+  cx.save();
+  cx.translate(IX+IW/2, FY+FH/2);
+  cx.rotate(-Math.PI/2);
+  label('Inlet Chamber', 0, 4, 16, '#4a5a6a');
+  cx.restore();
+
+  // Overflow label — only when overflowing
+  if(chamberFillLevel > 0.95){
+    label('Overflow', IX+IW+7, FY+6, 11, '#4a8ac0', 'center');
+  }
+}
+
+function drawWashWaterTank(){
+  const active = V[6];
+
+  // Proper rectangular tank shape (like in original diagram)
+  // Tank body
+  cx.fillStyle = active ? '#b8d4ee' : '#d4d0c8';
+  cx.fillRect(TX, TY, TW, TH);
+  cx.strokeStyle='#4a4a5a';
+  cx.lineWidth=2.5;
+  cx.strokeRect(TX, TY, TW, TH);
+
+  // Water inside tank
+  const wLevel = active ? 0.6 : 0.85;
+  const wy = TY + TH*(1-wLevel);
+  cx.fillStyle = active ? 'rgba(70,140,210,0.4)' : 'rgba(91,163,230,0.25)';
+  cx.fillRect(TX+2, wy, TW-4, TH*wLevel-2);
+
+  // Water surface ripple
+  cx.beginPath();
+  cx.moveTo(TX+2, wy);
+  for(let i=0; i<TW-4; i+=6){
+    cx.lineTo(TX+2+i, wy + Math.sin((i+tick*2)*0.1)*1.5);
+  }
+  cx.strokeStyle = 'rgba(91,163,230,0.4)';
+  cx.lineWidth=1;
+  cx.stroke();
+
+  // Drain animation when active
+  if(active){
+    cx.fillStyle = `rgba(70,140,210,${0.3+0.15*Math.sin(tick*0.1)})`;
+    cx.fillRect(TX+2, wy, TW-4, TH*wLevel-2);
+  }
+
+  label('Wash Water', TX+TW/2, TY-16, 13, '#2a3a5a');
+  label('Storage Tank', TX+TW/2, TY-3, 13, '#2a3a5a');
+}
+
+function drawAirCompressor(){
+  const active = V[5];
+
+  // Larger, clearer compressor shape
+  cx.fillStyle = active ? '#c0d8f0' : '#d4d0c8';
+  cx.strokeStyle='#4a4a5a';
+  cx.lineWidth=2;
+
+  // Cylindrical body
+  cx.beginPath();
+  cx.moveTo(AX, AY+12);
+  cx.lineTo(AX, AY+AH);
+  cx.lineTo(AX+AW, AY+AH);
+  cx.lineTo(AX+AW, AY+12);
+  cx.arc(AX+AW/2, AY+12, AW/2, 0, Math.PI, true);
+  cx.closePath();
+  cx.fill();
+  cx.stroke();
+
+  // Dome top
+  cx.beginPath();
+  cx.arc(AX+AW/2, AY+12, AW/2, Math.PI, 0);
+  cx.stroke();
+
+  // Nozzle on top
+  cx.fillStyle='#5a5a6a';
+  cx.fillRect(AX+AW/2-3, AY-4, 6, 14);
+
+  // Pressure gauge circle
+  cx.beginPath();
+  cx.arc(AX+AW/2, AY+AH/2+6, 6, 0, Math.PI*2);
+  cx.strokeStyle='#6a6a7a';
+  cx.lineWidth=1.5;
+  cx.stroke();
+  if(active){
+    cx.beginPath();
+    cx.arc(AX+AW/2, AY+AH/2+6, 4, 0, Math.PI*2);
+    cx.fillStyle = `rgba(100,170,230,${0.3+0.2*Math.sin(tick*0.12)})`;
+    cx.fill();
+  }
+
+  if(active){
+    // Pulsing glow
+    cx.beginPath();
+    cx.arc(AX+AW/2, AY+AH/2+6, AW/2+6, 0, Math.PI*2);
+    cx.fillStyle = `rgba(100,170,230,${0.08+0.06*Math.sin(tick*0.12)})`;
+    cx.fill();
+  }
+
+  label('Air', AX+AW/2, AY-20, 13, '#2a3a5a');
+  label('Compressor', AX+AW/2, AY-7, 12, '#4a5a6a');
+}
+
+function drawPipework(){
+  // ===== V1: FROM SETTLING TANK → INLET CHAMBER =====
+  const inletPipeY = FY + FH/2 - 50;
+  pipe([[30, inletPipeY], [VP[1].x-VR-4, inletPipeY]], V[1]);
+  pipe([[VP[1].x+VR+4, inletPipeY], [IX-10, inletPipeY]], V[1]);
+  VP[1].y = inletPipeY;
+
+  label('Water from', 50, inletPipeY-28, 13, '#2a3a5a', 'center');
+  label('Settling Tank', 50, inletPipeY-14, 13, '#2a3a5a', 'center');
+
+  if(V[1]){
+    cx.fillStyle='#3a8ad0';
+    cx.beginPath();
+    cx.moveTo(42, inletPipeY-6);
+    cx.lineTo(56, inletPipeY);
+    cx.lineTo(42, inletPipeY+6);
+    cx.fill();
+  }
+
+  // ===== MAIN DRAIN → BOTTOM PIPE NETWORK =====
+  const mainY = FY + FH + 25;
+  // Pipe down from filter bottom
+  pipe([[FX+60, FY+FH], [FX+60, mainY]], V[3]||V[4]);
+  // Left segment: filter exit to V3 — active when V3 or V4
+  pipe([[FX+60, mainY], [VP[3].x, mainY]], V[3]||V[4]);
+  // Right segment: V3 to V4 — active only when V4
+  pipe([[VP[3].x, mainY], [VP[4].x, mainY]], V[4]);
+
+  // ===== V2: WASH WATER GUTTER — exits from bottom of INLET CHAMBER =====
+  // Brownish color when carrying turbid water — only activates after dirty water reaches chamber
+  const v2Color = '#8a6a30';
+  const v2Active = V[2] && dirtyChamberfill > 0.2; // only active after chamber has some dirty water
+  const inletCenterX = IX + IW/2;
+  pipe([[inletCenterX, FY+FH], [inletCenterX, mainY]], v2Active, null, v2Color);
+  pipe([[inletCenterX, mainY], [VP[2].x, mainY]], v2Active, null, v2Color);
+  pipe([[VP[2].x, mainY], [VP[2].x, VP[2].y-VR-4]], v2Active, null, v2Color);
+
+  // Shared gutter exit pipe BELOW V2 — used by both V2 and V3
+  const gutterExitY = VP[2].y + VR + 4;
+  const gutterEndY = VP[2].y + 50;
+  const gutterActive = v2Active || V[3];
+  const gutterColor = v2Active ? v2Color : null;
+  pipe([[VP[2].x, gutterExitY], [VP[2].x, gutterEndY]], gutterActive, null, gutterColor);
+
+  label('Wash Water', VP[2].x, gutterEndY + 14, 12, '#2a3a5a');
+  label('Gutter', VP[2].x, gutterEndY + 28, 12, '#2a3a5a');
+  if(V[2]||V[3]){
+    cx.fillStyle = V[2] ? '#b08040' : '#4aaa7a';
+    cx.beginPath();
+    cx.moveTo(VP[2].x-6, gutterEndY+2);
+    cx.lineTo(VP[2].x, gutterEndY+12);
+    cx.lineTo(VP[2].x+6, gutterEndY+2);
+    cx.fill();
+  }
+
+  // ===== V3: MATURATION — connects to below V2 (shared gutter) =====
+  // From main drain → down through V3 → horizontal to below V2
+  pipe([[VP[3].x, mainY], [VP[3].x, VP[3].y-VR-4]], V[3]);
+  // Below V3 → horizontal run to below V2
+  const belowV3Y = VP[3].y + VR + 4;
+  const connectionY = gutterExitY + (gutterEndY - gutterExitY) / 2; // midpoint below V2
+  pipe([[VP[3].x, belowV3Y], [VP[3].x, connectionY]], V[3]);
+  pipe([[VP[3].x, connectionY], [VP[2].x, connectionY]], V[3]);
+
+  // ===== V4: FILTERED WATER OUT =====
+  pipe([[VP[4].x, mainY], [VP[4].x, VP[4].y-VR-4]], V[4]);
+  pipe([[VP[4].x, VP[4].y+VR+4], [VP[4].x, VP[4].y+40]], V[4]);
+  label('Filtered Water', VP[4].x, VP[4].y+54, 12, '#2a3a5a');
+  label('(To Disinfection)', VP[4].x, VP[4].y+68, 11, '#6a7a9a');
+  if(V[4]){
+    cx.fillStyle='#3a8ad0';
+    cx.beginPath();
+    cx.moveTo(VP[4].x-6, VP[4].y+32);
+    cx.lineTo(VP[4].x, VP[4].y+42);
+    cx.lineTo(VP[4].x+6, VP[4].y+32);
+    cx.fill();
+  }
+
+  // ===== V6: BACKWASH WATER IN (from wash water tank) =====
+  // Tank bottom → down to V6 height → bend left through V6 → up into filter
+  const v6Y = VP[6].y;
+  // Down from tank bottom to V6 height
+  pipe([[TX+TW/2, TY+TH], [TX+TW/2, v6Y]], V[6]);
+  // Bend left to V6
+  pipe([[TX+TW/2, v6Y], [VP[6].x+VR+4, v6Y]], V[6]);
+  // From V6 continue left and up into filter bottom
+  pipe([[VP[6].x-VR-4, v6Y], [FX+FW-40, v6Y]], V[6]);
+  pipe([[FX+FW-40, v6Y], [FX+FW-40, FY+FH]], V[6]);
+  label('Backwash In', VP[6].x, v6Y-VR-10, 12, '#2a3a5a');
+
+  // ===== V5: COMPRESSED AIR IN (from air compressor) =====
+  // Compressor bottom → straight down (tall vertical) to V5 height → bend left through V5 → up into filter
+  const v5Y = VP[5].y;
+  // Down from compressor bottom all the way to V5 height
+  pipe([[AX+AW/2, AY+AH], [AX+AW/2, v5Y]], V[5]);
+  // Bend left to V5
+  pipe([[AX+AW/2, v5Y], [VP[5].x+VR+4, v5Y]], V[5]);
+  // From V5 continue left and up into filter bottom
+  pipe([[VP[5].x-VR-4, v5Y], [FX+FW-80, v5Y]], V[5]);
+  pipe([[FX+FW-80, v5Y], [FX+FW-80, FY+FH]], V[5]);
+  label('Air In', VP[5].x, v5Y-VR-10, 12, '#2a3a5a');
+}
+
+// ========== WATER PARTICLES ==========
+const TROUGH_BOTTOM = 53; // FY + 35 + 18 (troughTopY + troughH relative to FY)
+
+function initParticles(){
+  waterDrops = [];
+  airBubs = [];
+
+  const downFlow = V[1] && (V[4]||V[3]);
+  const upFlow = V[6];
+
+  if(downFlow){
+    // Particles start at trough bottom, fall through sand and gravel
+    for(let i=0;i<45;i++){
+      const startY = FY + TROUGH_BOTTOM; // from trough bottom
+      const endY = FY + FH; // to filter bottom
+      waterDrops.push({
+        x: FX+15+Math.random()*(FW-30),
+        y: startY + Math.random()*(endY - startY),
+        vy: 0.3+Math.random()*0.5,
+        r: 1.2+Math.random()*1.5,
+        startY: startY,
+        endY: endY,
+        dir: 'down',
+        col: V[3] ? 'rgba(70,170,120,0.45)' : 'rgba(70,140,220,0.4)'
+      });
+    }
+  }
+
+  if(upFlow){
+    // Particles start from underdrain, rise up to trough level
+    const startY = FY + SUPER + SAND + GRAVEL; // underdrain area
+    const endY = FY + 35; // trough top (where they get collected)
+    for(let i=0;i<45;i++){
+      waterDrops.push({
+        x: FX+15+Math.random()*(FW-30),
+        y: endY + Math.random()*(startY - endY),
+        vy: -(0.3+Math.random()*0.6),
+        r: 1.2+Math.random()*1.5,
+        startY: startY,
+        endY: endY,
+        dir: 'up',
+        col: 'rgba(180,130,70,0.4)'
+      });
+    }
+  }
+
+  if(V[5]){
+    for(let i=0;i<20;i++){
+      airBubs.push({
+        x: FX+30+Math.random()*(FW-60),
+        y: FY+SUPER+SAND+Math.random()*(GRAVEL+UNDER),
+        vy: -(0.5+Math.random()*0.8),
+        r: 2+Math.random()*3.5,
+        wobble: Math.random()*Math.PI*2
+      });
+    }
+  }
+}
+
+function drawParticles(){
+  // Water drops
+  waterDrops.forEach(d=>{
+    d.y += d.vy;
+    d.x += (Math.random()-0.5)*0.4;
+
+    if(d.dir === 'down'){
+      // Reset to trough bottom when past filter bottom
+      if(d.y > d.endY) d.y = d.startY;
+    } else {
+      // Reset to underdrain when past trough top (collected by trough)
+      if(d.y < d.endY) d.y = d.startY;
+    }
+
+    d.x = Math.max(FX+3, Math.min(FX+FW-3, d.x));
+
+    cx.beginPath();
+    cx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+    cx.fillStyle=d.col;
+    cx.fill();
+  });
+
+  // Air bubbles
+  airBubs.forEach(b=>{
+    b.y += b.vy;
+    b.wobble += 0.06;
+    b.x += Math.sin(b.wobble)*0.5;
+    if(b.y<FY+15) b.y=FY+FH-UNDER;
+    b.x = Math.max(FX+5, Math.min(FX+FW-5, b.x));
+
+    cx.beginPath();
+    cx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+    cx.strokeStyle='rgba(160,200,240,0.5)';
+    cx.lineWidth=1;
+    cx.stroke();
+    // Shine
+    cx.beginPath();
+    cx.arc(b.x-b.r*0.25, b.y-b.r*0.25, b.r*0.2, 0, Math.PI*2);
+    cx.fillStyle='rgba(255,255,255,0.6)';
+    cx.fill();
+  });
+}
+
+function drawFlowArrows(){
+  const a = 0.3 + 0.2*Math.sin(tick*0.05);
+  cx.globalAlpha = a;
+  const arrowSize = 5;
+
+  if(percolationStarted && V[1] && (V[4]||V[3])){
+    // Downward arrows spread across sand bed and gravel bed
+    const col = V[3] ? '#2a9a5a' : '#2e78c2';
+    cx.fillStyle = col;
+
+    // Row of arrows across the sand bed (2 rows)
+    const sandMidY1 = FY + SUPER + SAND * 0.33;
+    const sandMidY2 = FY + SUPER + SAND * 0.66;
+    const gravelMidY = FY + SUPER + SAND + GRAVEL * 0.5;
+
+    [sandMidY1, sandMidY2, gravelMidY].forEach(ay => {
+      for(let i = 0; i < 6; i++){
+        const ax = FX + 50 + i * ((FW - 100) / 5);
+        cx.beginPath();
+        cx.moveTo(ax - arrowSize, ay - arrowSize);
+        cx.lineTo(ax + arrowSize, ay - arrowSize);
+        cx.lineTo(ax, ay + arrowSize);
+        cx.fill();
+      }
+    });
+  }
+
+  if(V[6]){
+    // Upward arrows spread across sand and gravel during backwash
+    cx.fillStyle='#b08040';
+
+    const sandMidY1 = FY + SUPER + SAND * 0.33;
+    const sandMidY2 = FY + SUPER + SAND * 0.66;
+    const gravelMidY = FY + SUPER + SAND + GRAVEL * 0.5;
+
+    [gravelMidY, sandMidY2, sandMidY1].forEach(ay => {
+      for(let i = 0; i < 6; i++){
+        const ax = FX + 50 + i * ((FW - 100) / 5);
+        cx.beginPath();
+        cx.moveTo(ax - arrowSize, ay + arrowSize);
+        cx.lineTo(ax + arrowSize, ay + arrowSize);
+        cx.lineTo(ax, ay - arrowSize);
+        cx.fill();
+      }
+    });
+  }
+
+  cx.globalAlpha=1;
+}
+
+// ========== RENDER ==========
+function render(){
+  cx.clearRect(0,0,CW,CH);
+  cx.fillStyle='#fefefe';
+  cx.fillRect(0,0,CW,CH);
+
+  // ---- BACKWASH ANIMATIONS (V6) ----
+  const expandSpeed = 0.12;
+  const maxBackwashWaterH = SUPER - 35;
+  const waterRiseSpeed = 0.25;
+
+  if(V[6]){
+    if(currentSandExpand < SAND_EXPAND){
+      currentSandExpand = Math.min(currentSandExpand + expandSpeed, SAND_EXPAND);
+    }
+    if(currentSandExpand > 5){
+      if(currentBackwashWaterH < maxBackwashWaterH){
+        currentBackwashWaterH = Math.min(currentBackwashWaterH + waterRiseSpeed, maxBackwashWaterH);
+      }
+    }
+    // After trough fills, dirty water gradually fills inlet chamber (~2 sec)
+    const backwashTroughFull = currentBackwashWaterH > (SUPER - 35 - 10);
+    if(backwashTroughFull){
+      if(dirtyChamberfill < 1){
+        dirtyChamberfill = Math.min(dirtyChamberfill + 0.008, 1); // ~2 sec to reach 1.0
+      }
+    }
+  } else {
+    if(currentSandExpand > 0){
+      currentSandExpand = Math.max(currentSandExpand - expandSpeed * 2, 0);
+    }
+    if(currentBackwashWaterH > 0){
+      currentBackwashWaterH = Math.max(currentBackwashWaterH - waterRiseSpeed * 3, 0);
+    }
+    if(dirtyChamberfill > 0){
+      dirtyChamberfill = Math.max(dirtyChamberfill - 0.02, 0); // drains faster
+    }
+  }
+
+  // ---- CASCADING FILL ANIMATION (V1) ----
+  const chamberFillSpeed = 0.005;  // ~3.3 sec to fill (0→1 over ~200 frames)
+  const troughFillSpeed = 0.008;   // ~2 sec to fill
+  const supernatantFillSpeed = 0.005; // ~3.3 sec to fill
+
+  if(V[1]){
+    // Step 1: Chamber fills
+    if(chamberFillLevel < 1){
+      chamberFillLevel = Math.min(chamberFillLevel + chamberFillSpeed, 1);
+    }
+    // Step 2: Once chamber overflows, trough fills
+    if(chamberFillLevel > 0.95){
+      if(troughFillLevel < 1){
+        troughFillLevel = Math.min(troughFillLevel + troughFillSpeed, 1);
+      }
+    }
+    // Step 3: Once trough overflows, supernatant fills
+    if(troughFillLevel > 0.8){
+      if(supernatantFillLevel < 1){
+        supernatantFillLevel = Math.min(supernatantFillLevel + supernatantFillSpeed, 1);
+      }
+    }
+    // Step 4: Once supernatant starts rising, start percolation particles
+    if(supernatantFillLevel > 0.01 && !percolationStarted){
+      percolationStarted = true;
+      initParticles();
+    }
+  } else {
+    // Drain in reverse (faster)
+    if(supernatantFillLevel > 0){
+      supernatantFillLevel = Math.max(supernatantFillLevel - supernatantFillSpeed * 3, 0);
+    }
+    if(supernatantFillLevel < 0.1){
+      if(troughFillLevel > 0){
+        troughFillLevel = Math.max(troughFillLevel - troughFillSpeed * 3, 0);
+      }
+    }
+    if(troughFillLevel < 0.1){
+      if(chamberFillLevel > 0){
+        chamberFillLevel = Math.max(chamberFillLevel - chamberFillSpeed * 3, 0);
+      }
+    }
+    if(percolationStarted && supernatantFillLevel < 0.1){
+      percolationStarted = false;
+      waterDrops = [];
+    }
+  }
+
+  // Brownish background strip — only over the RSF tank (from left wall to right wall)
+  cx.fillStyle='#e0dcd4';
+  cx.fillRect(FX, FY, FW, SUPER);
+
+  generateTextures();
+  drawFilterBody();
+  drawInletChamber();
+  drawWashWaterTank();
+  drawAirCompressor();
+  drawPipework();
+  drawFlowArrows();
+  drawParticles();
+
+  for(let i=1;i<=6;i++) drawValve(i);
+
+  tick++;
+  requestAnimationFrame(render);
+}
+
+initParticles();
+updateUI();
+render();
+</script>
+</body>
+</html>
