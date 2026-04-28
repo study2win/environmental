@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Types of Settling — Sedimentation Tank Simulation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#eef1f5;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:14px 10px}
+.hdr{text-align:center;margin-bottom:10px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:28px;color:#1a2744}
+.hdr p{font-size:12px;color:#7a8599}
+.main{display:flex;gap:12px;justify-content:center;align-items:flex-start;max-width:1350px;width:100%}
+.left-col{width:220px;flex-shrink:0}
+.panel{background:#fff;border:1px solid #dde;border-radius:12px;padding:14px;margin-bottom:10px}
+.panel h2{font-family:'Instrument Serif',serif;font-size:15px;color:#1a2744;margin-bottom:10px;border-bottom:1px solid #eee;padding-bottom:5px}
+.btn-type{display:block;width:100%;padding:10px 12px;border:2px solid #ddd;border-radius:10px;background:#fff;font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;color:#1a2744;text-align:left;margin-bottom:6px;line-height:1.4}
+.btn-type:hover{background:#e8eef6;border-color:#4a7ab5}
+.btn-type.active{background:#2a5a8a;color:#fff;border-color:#2a5a8a}
+.btn-type .type-num{font-size:10px;font-weight:700;opacity:0.6}
+.canvas-wrap{background:#fff;border:1px solid #dde;border-radius:12px;padding:6px}
+canvas{display:block;width:900px;height:760px}
+.right-col{width:260px;flex-shrink:0}
+.info-box{background:#fff;border:1px solid #dde;border-radius:12px;padding:14px;height:760px;overflow-y:auto}
+.info-box h2{font-family:'Instrument Serif',serif;font-size:16px;color:#1a2744;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:5px}
+.info-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.info-desc{font-size:12px;color:#4a5568;line-height:1.7;margin-bottom:10px}
+.info-example{background:#f0f4f8;border-radius:8px;padding:8px 10px;font-size:11px;color:#2a5a8a;font-weight:500;margin-bottom:10px}
+.info-key{font-size:11px;color:#555;line-height:1.6}
+.char-item{margin-bottom:4px;padding-left:8px;border-left:3px solid #ddd}
+.note-box{text-align:center;max-width:1350px;width:100%;margin-top:10px;padding:8px 16px;background:#fff;border:1px solid #dde;border-radius:10px}
+.note-box p{font-size:11px;color:#555;line-height:1.5;margin:0;font-family:'Outfit',sans-serif}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Types of Settling in Sedimentation</h1>
+  <p>Created by <strong>SAGAR DODEJA SIR (Ex. IES)</strong></p>
+</div>
+<div class="main">
+  <div class="left-col">
+    <div class="panel">
+      <h2>Select Type</h2>
+      <button class="btn-type active" id="btn-1" onclick="setType(1)">
+        <span class="type-num">TYPE I</span><br>Discrete Particle Settling
+      </button>
+      <button class="btn-type" id="btn-2" onclick="setType(2)">
+        <span class="type-num">TYPE II</span><br>Flocculent Settling
+      </button>
+      <button class="btn-type" id="btn-3" onclick="setType(3)">
+        <span class="type-num">TYPE III</span><br>Zone / Hindered Settling
+      </button>
+      <button class="btn-type" id="btn-4" onclick="setType(4)">
+        <span class="type-num">TYPE IV</span><br>Compression Settling
+      </button>
+    </div>
+    <div class="panel">
+      <h2>Controls</h2>
+      <button class="btn-type" onclick="resetSim()" style="text-align:center;border-color:#aaa">Reset Animation</button>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c" width="900" height="760"></canvas>
+  </div>
+
+  <div class="right-col">
+    <div class="info-box" id="info-panel">
+      <h2>About This Type</h2>
+      <div id="info-content"></div>
+    </div>
+  </div>
+</div>
+<div class="note-box">
+  <p><strong>Note:</strong> This simulation shows the general behaviour of each settling type in a horizontal-flow rectangular sedimentation tank. Refer class notes for detailed theory, derivations, and numerical problems.</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 900, CH = 760;
+let tick = 0;
+let currentType = 1;
+
+// Tank geometry
+const TX = 80, TY = 80, TW = 720, TH = 380;
+const inletX = TX, outletX = TX + TW;
+const baffleW = 8;
+const weirH = 30;
+const waterTop = TY + 10;
+const waterBot = TY + TH;
+
+// Colors for each type
+const COLORS = {
+  1: {main:'#e67e22', light:'rgba(230,126,34,0.3)', name:'Orange'},
+  2: {main:'#2980b9', light:'rgba(41,128,185,0.3)', name:'Blue'},
+  3: {main:'#27ae60', light:'rgba(39,174,96,0.3)', name:'Green'},
+  4: {main:'#c0392b', light:'rgba(192,57,43,0.3)', name:'Red/Brown'}
+};
+
+// Particle systems
+let particles = [];
+let paths = []; // traced paths
+let blanketY = 0; // for Type III
+let blanketParticles = []; // visible particles in blanket
+let compressionH = 0; // for Type IV
+let compressionParticles = [];
+let combinedZones = {}; // for combined view
+
+// Info content for each type
+const infoData = {
+  1: {
+    title: 'Type I — Discrete Particle Settling',
+    color: '#e67e22',
+    desc: 'Each particle settles <strong>independently</strong> without any interaction with neighbouring particles. The particle\'s size, shape, and density <strong>remain constant</strong> throughout settling.',
+    chars: [
+      'Settling velocity is constant (Stokes\' Law)',
+      'Path is a straight diagonal line',
+      'Particle properties do not change',
+      'Removal depends on overflow rate (v₀ = Q/A)',
+      'Independent of depth and detention time',
+      'Critical velocity: v₀ = H/t₀'
+    ],
+    example: 'Grit chamber, sand particles in pre-sedimentation',
+    law: 'v_s = (g·d²·(ρ_s - ρ_w)) / (18·μ)  [Stokes\' Law]'
+  },
+  2: {
+    title: 'Type II — Flocculent Settling',
+    color: '#2980b9',
+    desc: 'Particles <strong>collide and aggregate</strong> during settling, forming larger flocs. As flocs grow, their settling velocity <strong>increases</strong> — the path curves and gets steeper with depth.',
+    chars: [
+      'Particle size increases during settling',
+      'Settling velocity increases with depth',
+      'Path is a curve (gets steeper)',
+      'Removal depends on both depth AND time',
+      'Cannot be predicted by Stokes\' Law alone',
+      'Requires settling column test for design'
+    ],
+    example: 'Primary sedimentation tank (after coagulation/flocculation), alum floc',
+    law: 'Settling velocity increases as floc grows — no single formula'
+  },
+  3: {
+    title: 'Type III — Zone / Hindered Settling',
+    color: '#27ae60',
+    desc: 'At <strong>high particle concentration</strong>, particles are so close that they settle as a <strong>mass or blanket</strong>, not individually. A distinct interface forms between the clear water and the settling mass.',
+    chars: [
+      'Particles settle as a coherent mass',
+      'Clear interface between settled zone and clear water',
+      'Interface descends at uniform velocity',
+      'Individual particles are NOT distinguishable in motion',
+      'Upward displacement of water retards settling',
+      'Settling rate decreases with concentration'
+    ],
+    example: 'Secondary clarifier (activated sludge), lime-soda softening',
+    law: 'v_zone < v_stokes (hindered by surrounding particles)'
+  },
+  4: {
+    title: 'Type IV — Compression Settling',
+    color: '#c0392b',
+    desc: 'Settled sludge at the bottom is <strong>compressed</strong> by the weight of particles accumulating above. Water is <strong>squeezed out</strong> and the sludge layer compacts over time.',
+    chars: [
+      'Occurs at the bottom of the settling tank',
+      'Sludge is compressed by its own weight',
+      'Water is expelled upward from sludge',
+      'Sludge volume decreases over time',
+      'Rate depends on compressibility of sludge',
+      'Important for thickener design'
+    ],
+    example: 'Bottom of secondary clarifier, gravity thickener',
+    law: 'dH/dt = -k(H - H_∞)  [Compression equation]'
+  },
+  5: {
+    title: 'All Types — Combined View',
+    color: '#1a2744',
+    desc: 'In a real clarifier (especially secondary clarifiers), <strong>all four types</strong> of settling occur simultaneously at different depths. The tank can be divided into distinct zones.',
+    chars: [
+      'Top: Clear water + discrete settling (Type I)',
+      'Upper-mid: Flocculent settling (Type II)',
+      'Lower-mid: Zone/hindered settling (Type III)',
+      'Bottom: Compression settling (Type IV)',
+      'Zones are not sharply divided — gradual transition',
+      'Design must account for all mechanisms'
+    ],
+    example: 'Secondary clarifier in activated sludge process',
+    law: 'Each zone follows its own settling mechanism'
+  }
+};
+
+function setType(t){
+  currentType = t;
+  for(let i=1;i<=4;i++){
+    document.getElementById('btn-'+i).classList.toggle('active', i===t);
+  }
+  resetSim();
+  updateInfo();
+}
+
+function resetSim(){
+  tick = 0;
+  particles = [];
+  paths = [];
+  blanketY = waterTop + 20;
+  blanketParticles = [];
+  compressionH = 0;
+  compressionParticles = [];
+  window.freeParticles = [];
+  initParticles();
+}
+
+function updateInfo(){
+  const d = infoData[currentType];
+  let html = `<div class="info-title" style="color:${d.color}">${d.title}</div>`;
+  html += `<div class="info-desc">${d.desc}</div>`;
+  html += `<div class="info-example"><strong>Example:</strong> ${d.example}</div>`;
+  html += `<div class="info-key"><strong>Key Characteristics:</strong></div>`;
+  d.chars.forEach(c => {
+    html += `<div class="char-item" style="border-color:${d.color}">${c}</div>`;
+  });
+  html += `<div style="margin-top:10px;padding:8px;background:#f8f6f0;border-radius:6px;font-size:11px;font-family:monospace;color:#333">${d.law}</div>`;
+  document.getElementById('info-content').innerHTML = html;
+}
+
+// ========== PARTICLE INIT ==========
+function initParticles(){
+  if(currentType === 1) initType1();
+  if(currentType === 2) initType2();
+  if(currentType === 3) initType3();
+  if(currentType === 4) initType4();
+}
+
+function initType1(){
+  // Hero particle velocity: must go from top-left to bottom-right exactly
+  // vy_hero = vx * TH / TW
+  const vx = 1.2;
+  const vyHero = vx * (TH - 25) / (TW - 50);
+  
+  const particleData = [
+    // HERO — enters at top, settles exactly at bottom-right
+    {entryFrac: 0.01, vy: vyHero, r: 7, isHero: true},
+    
+    // Large/heavy particles — steep slope, settle quickly
+    {entryFrac: 0.05, vy: 1.0, r: 10},
+    {entryFrac: 0.15, vy: 0.95, r: 9.5},
+    {entryFrac: 0.30, vy: 0.9, r: 9},
+    {entryFrac: 0.50, vy: 0.85, r: 8.5},
+    
+    // Medium particles — moderate slope
+    {entryFrac: 0.10, vy: 0.6, r: 7},
+    {entryFrac: 0.30, vy: 0.55, r: 6.5},
+    {entryFrac: 0.50, vy: 0.5, r: 6},
+    
+    // Particles entering at lower heights (near bottom) — settle easily
+    {entryFrac: 0.60, vy: 0.7, r: 8},
+    {entryFrac: 0.70, vy: 0.5, r: 6},
+    {entryFrac: 0.75, vy: 0.4, r: 5.5},
+    {entryFrac: 0.80, vy: 0.35, r: 5},
+    {entryFrac: 0.85, vy: 0.3, r: 4.5},
+    {entryFrac: 0.90, vy: 0.25, r: 4},
+    
+    // Small/light particles entering near top — will escape
+    {entryFrac: 0.06, vy: 0.28, r: 4.5},
+    {entryFrac: 0.10, vy: 0.22, r: 3.5},
+    {entryFrac: 0.04, vy: 0.18, r: 3},
+  ];
+  
+  particleData.forEach((pd, i) => {
+    const entryY = waterTop + 15 + pd.entryFrac * (TH - 40);
+    particles.push({
+      x: TX + baffleW + 15,
+      y: entryY,
+      vx: vx,
+      vy: pd.vy,
+      r: pd.r,
+      settled: false,
+      escaped: false,
+      isHero: pd.isHero || false,
+      path: [{x: TX + baffleW + 15, y: entryY}],
+      delay: pd.isHero ? 0 : (i * 30 + 20)
+    });
+  });
+}
+
+function initType2(){
+  // Free floating small particles scattered in the tank
+  // These will be "absorbed" by tracer particles on collision
+  particles = []; // reset
+  
+  // Tracer particles — these are the ones we track
+  const tracerData = [
+    {entryFrac: 0.05, delay: 0},
+    {entryFrac: 0.20, delay: 60},
+    {entryFrac: 0.40, delay: 120},
+    {entryFrac: 0.55, delay: 180},
+    {entryFrac: 0.15, delay: 240},
+    {entryFrac: 0.35, delay: 300},
+  ];
+  
+  tracerData.forEach((td, i) => {
+    const entryY = waterTop + 20 + td.entryFrac * (TH - 50);
+    particles.push({
+      x: TX + baffleW + 15,
+      y: entryY,
+      vx: 0.8,
+      vy: 0.2,
+      r: 4,
+      settled: false,
+      escaped: false,
+      isTracer: true,
+      path: [{x: TX + baffleW + 15, y: entryY}],
+      mergePoints: [], // {x, y, newR} — where mergers happened
+      delay: td.delay
+    });
+  });
+  
+  // Free particles scattered throughout the tank
+  window.freeParticles = [];
+  for(let i = 0; i < 80; i++){
+    window.freeParticles.push({
+      x: TX + 40 + Math.random() * (TW - 80),
+      y: waterTop + 20 + Math.random() * (TH - 50),
+      r: 2.5 + Math.random() * 2,
+      alive: true,
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: (Math.random() - 0.5) * 0.1 + 0.05
+    });
+  }
+}
+
+function initType3(){
+  blanketParticles = [];
+  window.type3Sludge = 0;
+  window.type3SpawnTimer = 0;
+}
+
+function initType4(){
+  compressionH = TH * 0.25; // initial sludge height — one quarter of tank
+  compressionParticles = [];
+  const cols = 40;
+  const rows = 25;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      compressionParticles.push({
+        x: TX + 20 + c * (TW - 40) / cols + (Math.random()-0.5)*5,
+        rowFrac: r / rows, // 0=top of sludge, 1=bottom
+        r: 3 + Math.random()*2,
+        wobble: Math.random()*Math.PI*2
+      });
+    }
+  }
+  // Water drops that get squeezed out
+  window.waterDrops4 = [];
+}
+
+function initCombined(){
+  // A few particles for each zone
+  // Type I particles (top)
+  for(let i=0;i<4;i++){
+    const entryY = waterTop + 20 + i * 30;
+    particles.push({
+      type:1, x: TX+baffleW+15, y: entryY,
+      vx:1.2, vy:0.5, r:5, settled:false, escaped:false,
+      path:[{x:TX+baffleW+15,y:entryY}], delay:i*50
+    });
+  }
+  // Type II particles (upper-mid)
+  for(let i=0;i<4;i++){
+    const entryY = waterTop + 140 + i * 25;
+    particles.push({
+      type:2, x: TX+baffleW+15, y: entryY,
+      vx:1.0, vy:0.2, r:3, settled:false, escaped:false,
+      path:[{x:TX+baffleW+15,y:entryY}], delay:i*60,
+      growthRate:0.003, vyAccel:0.001
+    });
+  }
+  // Type III blanket (lower-mid)
+  blanketY = waterTop + TH * 0.55;
+  blanketParticles = [];
+  const cols=50, rows=10;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      blanketParticles.push({
+        x: TX+20+c*(TW-40)/cols+(Math.random()-0.5)*4,
+        baseY: r*5, r:2.5+Math.random()*1.5, wobble:Math.random()*Math.PI*2
+      });
+    }
+  }
+  // Type IV compression (bottom)
+  compressionH = TH * 0.15;
+  compressionParticles = [];
+  const cols4=40, rows4=8;
+  for(let r=0;r<rows4;r++){
+    for(let c=0;c<cols4;c++){
+      compressionParticles.push({
+        x: TX+20+c*(TW-40)/cols4+(Math.random()-0.5)*5,
+        rowFrac:r/rows4, r:2.5+Math.random()*1.5, wobble:Math.random()*Math.PI*2
+      });
+    }
+  }
+}
+
+// ========== UPDATE ==========
+function updateParticles(){
+  if(currentType === 1 || currentType === 2) updateIndividual();
+  if(currentType === 3) updateBlanket();
+  if(currentType === 4) updateCompression();
+}
+
+function updateIndividual(){
+  particles.forEach(p => {
+    if(p.settled || p.escaped) return;
+    if(tick < p.delay) return;
+    
+    p.x += p.vx;
+    p.y += p.vy;
+    
+    // Type II collision-based merging
+    if((currentType === 2 || p.type === 2) && p.isTracer && window.freeParticles){
+      window.freeParticles.forEach(fp => {
+        if(!fp.alive) return;
+        const dx = fp.x - p.x, dy = fp.y - p.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist < p.r + fp.r + 3){
+          // COLLISION! Merge
+          fp.alive = false;
+          const oldR = p.r;
+          p.r = Math.min(16, Math.sqrt(p.r*p.r + fp.r*fp.r)); // area-based growth
+          p.vy = Math.min(2.0, p.vy + 0.12); // settling gets faster
+          // Record merge point
+          p.mergePoints = p.mergePoints || [];
+          p.mergePoints.push({x: p.x, y: p.y, newR: p.r, tick: tick});
+          // Record path change at merge point
+          p.path.push({x: p.x, y: p.y, merge: true});
+        }
+      });
+    }
+    
+    // Record path
+    if(tick % 3 === 0){
+      p.path.push({x:p.x, y:p.y});
+    }
+    
+    // Check if settled (reached bottom)
+    if(p.y >= waterBot - p.r - 5){
+      p.y = waterBot - p.r - 5;
+      p.settled = true;
+      p.path.push({x:p.x, y:p.y});
+    }
+    
+    // Check if escaped (reached outlet)
+    if(p.x >= outletX - 15){
+      p.escaped = true;
+      p.path.push({x:p.x, y:p.y});
+    }
+  });
+  
+  // Move free particles — slow settling + gentle horizontal flow
+  if(window.freeParticles){
+    window.freeParticles.forEach(fp => {
+      if(!fp.alive) return;
+      // Constant slow settling + horizontal flow + slight Brownian wobble
+      fp.x += 0.15 + (Math.random()-0.5)*0.15; // slow horizontal flow
+      fp.y += 0.08 + (Math.random()-0.5)*0.08; // slow settling
+      // Wrap around if past outlet — re-enter from left
+      if(fp.x > TX+TW-15){
+        fp.x = TX + 30;
+        fp.y = waterTop + 20 + Math.random() * (TH * 0.5);
+      }
+      // If settled at bottom, respawn at top
+      if(fp.y > waterBot - 10){
+        fp.y = waterTop + 20 + Math.random() * 30;
+        fp.x = TX + 30 + Math.random() * 100;
+      }
+    });
+  }
+}
+
+function updateBlanket(){
+  if(currentType === 5) return;
+  
+  // Spawn dense cloud of particles from inlet every few frames
+  window.type3SpawnTimer = (window.type3SpawnTimer || 0) + 1;
+  if(window.type3SpawnTimer % 5 === 0){
+    const count = 12; // many particles per spawn
+    const entryX = TX + baffleW + 15;
+    for(let i = 0; i < count; i++){
+      // Random positions across the full height — dense, chaotic
+      const py = waterTop + 12 + Math.random() * (TH - 35);
+      blanketParticles.push({
+        x: entryX + (Math.random()-0.5)*10,
+        y: py,
+        vx: 0.5 + Math.random()*0.25, // flow velocity with variation
+        vy: 0.12 + Math.random()*0.06, // settling with variation
+        r: 2 + Math.random()*2.5,
+        settled: false,
+        escaped: false,
+        wobbleX: (Math.random()-0.5)*0.3, // random horizontal jostling
+        wobblePhase: Math.random()*Math.PI*2
+      });
+    }
+  }
+  
+  // Move all blanket particles — flow + settle + wobble (jostling)
+  blanketParticles.forEach(bp => {
+    if(bp.settled || bp.escaped) return;
+    
+    // Horizontal: flow + random wobble (jostling against neighbours)
+    bp.x += bp.vx + Math.sin(tick*0.05 + bp.wobblePhase)*bp.wobbleX;
+    // Vertical: settle + random wobble
+    bp.y += bp.vy + Math.sin(tick*0.07 + bp.wobblePhase + 1.5)*(bp.wobbleX*0.5);
+    
+    // Settle at bottom — become sludge
+    const sludgeLevel = waterBot - 15 - (window.type3Sludge || 0);
+    if(bp.y >= sludgeLevel){
+      bp.y = sludgeLevel + Math.random()*3;
+      bp.settled = true;
+      bp.vx = 0;
+      bp.vy = 0;
+    }
+    
+    // Escaped past outlet
+    if(bp.x > TX + TW - 15){
+      bp.escaped = true;
+    }
+  });
+  
+  // Build up sludge
+  const settledCount = blanketParticles.filter(bp => bp.settled).length;
+  window.type3Sludge = Math.min(TH * 0.35, settledCount * 0.025);
+  
+  // Cleanup — remove escaped particles to keep array manageable
+  if(blanketParticles.length > 3000){
+    blanketParticles = blanketParticles.filter(bp => !bp.escaped);
+  }
+}
+
+function updateCompression(){
+  const minH = TH * 0.12;
+  const speed = 0.025;
+  if(compressionH > minH){
+    compressionH -= speed;
+  }
+  
+  // Spawn water drops being squeezed out
+  if(!window.waterDrops4) window.waterDrops4 = [];
+  if(compressionH > minH + 2 && tick % 12 === 0){
+    const sludgeTop = waterBot - compressionH;
+    window.waterDrops4.push({
+      x: TX + 50 + Math.random() * (TW - 100),
+      y: sludgeTop,
+      vy: -0.5 - Math.random()*0.5,
+      r: 2 + Math.random()*1.5,
+      life: 120
+    });
+  }
+  
+  // Move water drops upward
+  window.waterDrops4.forEach(d => {
+    d.y += d.vy;
+    d.x += (Math.random()-0.5)*0.3;
+    d.life--;
+  });
+  // Remove dead drops
+  window.waterDrops4 = window.waterDrops4.filter(d => d.life > 0 && d.y > waterTop);
+}
+
+// ========== DRAWING ==========
+
+// Water flow streaks — persistent across frames
+let waterStreaks = [];
+function initWaterStreaks(){
+  waterStreaks = [];
+  for(let i = 0; i < 25; i++){
+    waterStreaks.push({
+      x: TX + 30 + Math.random() * (TW - 60),
+      y: waterTop + 15 + Math.random() * (TH - 40),
+      len: 20 + Math.random() * 40,
+      speed: 0.8 + Math.random() * 0.6,
+      alpha: 0.06 + Math.random() * 0.06
+    });
+  }
+}
+initWaterStreaks();
+
+function drawWaterFlow(){
+  // Animated horizontal streaks showing water flow
+  waterStreaks.forEach(ws => {
+    ws.x += ws.speed;
+    // Wrap around
+    if(ws.x > TX + TW - 15){
+      ws.x = TX + 20;
+      ws.y = waterTop + 15 + Math.random() * (TH - 40);
+    }
+    
+    cx.strokeStyle = `rgba(80,160,230,${ws.alpha})`;
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    cx.moveTo(ws.x, ws.y);
+    cx.lineTo(ws.x + ws.len, ws.y);
+    cx.stroke();
+    
+    // Small arrowhead at end
+    cx.fillStyle = `rgba(80,160,230,${ws.alpha})`;
+    cx.beginPath();
+    cx.moveTo(ws.x + ws.len, ws.y);
+    cx.lineTo(ws.x + ws.len - 5, ws.y - 2);
+    cx.lineTo(ws.x + ws.len - 5, ws.y + 2);
+    cx.fill();
+  });
+}
+
+function drawTank(){
+  // Water body
+  cx.fillStyle = 'rgba(180,215,245,0.2)';
+  cx.fillRect(TX, waterTop, TW, TH - 10);
+  
+  // Draw flowing water streaks
+  drawWaterFlow();
+  
+  // Tank walls
+  cx.strokeStyle = '#3a4a5a';
+  cx.lineWidth = 3;
+  cx.beginPath();
+  cx.moveTo(TX, TY);
+  cx.lineTo(TX, TY + TH);
+  cx.lineTo(TX + TW, TY + TH);
+  cx.lineTo(TX + TW, TY);
+  cx.stroke();
+  
+  // Inlet baffle — half depth, offset from tank wall
+  cx.fillStyle = '#5a6a7a';
+  cx.fillRect(TX + 25, TY, baffleW, TH / 2);
+  cx.fillStyle = '#3a4a5a';
+  cx.font = '600 15px "Outfit"';
+  cx.textAlign = 'center';
+  cx.save();
+  cx.translate(TX + 29, TY + TH/4);
+  cx.rotate(-Math.PI/2);
+  cx.fillText('Inlet Baffle', 0, -12);
+  cx.restore();
+  
+  // Outlet weir — offset from wall
+  cx.fillStyle = '#5a6a7a';
+  cx.fillRect(TX + TW - 25, TY, baffleW, weirH);
+  cx.fillStyle = '#3a4a5a';
+  cx.font = '600 15px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Weir', TX + TW - 21, TY + weirH + 20);
+  
+  // Inlet arrow
+  cx.fillStyle = '#3a8ad0';
+  cx.font = '600 17px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('INLET', TX - 5, TY - 10);
+  cx.beginPath();
+  cx.moveTo(TX - 25, TY + TH/2);
+  cx.lineTo(TX - 5, TY + TH/2 - 8);
+  cx.lineTo(TX - 5, TY + TH/2 + 8);
+  cx.fill();
+  
+  // Outlet arrow
+  cx.fillText('OUTLET', TX + TW + 10, TY - 10);
+  cx.beginPath();
+  cx.moveTo(TX + TW + 5, TY + 40);
+  cx.lineTo(TX + TW + 25, TY + 40 - 8);
+  cx.lineTo(TX + TW + 25, TY + 40 + 8);
+  cx.closePath();
+  cx.fill();
+  
+  // Sludge zone label
+  cx.fillStyle = 'rgba(140,110,60,0.15)';
+  cx.fillRect(TX + 1, waterBot - 20, TW - 2, 19);
+  cx.fillStyle = 'rgba(100,80,40,0.4)';
+  cx.font = '500 14px "Outfit"';
+  cx.fillText('Sludge Collection Zone', TX + TW/2, waterBot - 7);
+  
+  // Tank title
+  cx.fillStyle = '#1a2744';
+  cx.font = '700 20px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Rectangular Sedimentation Tank (Sectional View)', TX + TW/2, TY - 15);
+  
+  // Watermark
+  cx.fillStyle = 'rgba(26,39,68,0.06)';
+  cx.font = '500 12px "Outfit"';
+  cx.fillText('SAGAR DODEJA SIR (Ex. IES)', TX + TW/2, TY + TH + 20);
+  
+  // Dimensions
+  cx.fillStyle = '#888';
+  cx.font = '500 15px "Outfit"';
+  cx.textAlign = 'left';
+  cx.fillText('H', TX - 20, TY + TH/2 + 5);
+  cx.textAlign = 'center';
+  cx.fillText('L', TX + TW/2, TY + TH + 35);
+  
+  // H dimension line
+  cx.strokeStyle = '#aaa';
+  cx.lineWidth = 1;
+  cx.setLineDash([3,2]);
+  cx.beginPath();
+  cx.moveTo(TX - 12, TY + 5);
+  cx.lineTo(TX - 12, TY + TH - 5);
+  cx.stroke();
+  cx.setLineDash([]);
+  cx.fillStyle = '#aaa';
+  cx.beginPath();cx.moveTo(TX-15,TY+8);cx.lineTo(TX-12,TY+3);cx.lineTo(TX-9,TY+8);cx.fill();
+  cx.beginPath();cx.moveTo(TX-15,TY+TH-8);cx.lineTo(TX-12,TY+TH-3);cx.lineTo(TX-9,TY+TH-8);cx.fill();
+}
+
+function drawType1(){
+  const col = COLORS[1];
+  
+  // Draw paths and particles
+  particles.forEach(p => {
+    if(tick < p.delay) return;
+    if(p.path.length > 1){
+      if(p.isHero){
+        // Hero path — bold golden
+        cx.strokeStyle = 'rgba(218,165,32,0.5)';
+        cx.lineWidth = 4;
+      } else if(p.escaped){
+        cx.strokeStyle = 'rgba(200,50,50,0.25)';
+        cx.setLineDash([4,3]);
+        cx.lineWidth = 2.5;
+      } else {
+        cx.strokeStyle = col.light;
+        cx.lineWidth = 2.5;
+      }
+      cx.beginPath();
+      p.path.forEach((pt,i) => {
+        if(i===0) cx.moveTo(pt.x,pt.y);
+        else cx.lineTo(pt.x,pt.y);
+      });
+      cx.stroke();
+      cx.setLineDash([]);
+    }
+    
+    // Draw particle
+    if(p.escaped){
+      const lastPt = p.path[p.path.length - 1];
+      cx.fillStyle = 'rgba(200,50,50,0.3)';
+      cx.beginPath();
+      cx.arc(lastPt.x, lastPt.y, p.r, 0, Math.PI*2);
+      cx.fill();
+      // X mark
+      cx.strokeStyle = '#c0392b';
+      cx.lineWidth = 2;
+      cx.beginPath();
+      cx.moveTo(lastPt.x-5, lastPt.y-5);
+      cx.lineTo(lastPt.x+5, lastPt.y+5);
+      cx.moveTo(lastPt.x+5, lastPt.y-5);
+      cx.lineTo(lastPt.x-5, lastPt.y+5);
+      cx.stroke();
+    } else if(p.settled){
+      if(p.isHero){
+        // HERO settled — golden with glow
+        cx.shadowColor = 'rgba(218,165,32,0.6)';
+        cx.shadowBlur = 12;
+        cx.fillStyle = '#DAA520';
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.r + 2, 0, Math.PI*2);
+        cx.fill();
+        cx.shadowBlur = 0;
+        cx.strokeStyle = '#B8860B';
+        cx.lineWidth = 2;
+        cx.stroke();
+        
+        // OUR HERO! label
+        cx.fillStyle = '#B8860B';
+        cx.font = '800 20px "Outfit"';
+        cx.textAlign = 'center';
+        cx.fillText('OUR HERO!', p.x, p.y - 18);
+        cx.font = '500 14px "Outfit"';
+        cx.fillStyle = '#8B6914';
+        cx.fillText('(just barely settled)', p.x, p.y - 5);
+      } else {
+        // Normal settled particle
+        cx.fillStyle = 'rgba(230,126,34,0.5)';
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        cx.fill();
+        cx.strokeStyle = 'rgba(0,0,0,0.15)';
+        cx.lineWidth = 1;
+        cx.stroke();
+        // Small checkmark
+        cx.fillStyle = '#27ae60';
+        cx.font = '700 12px "Outfit"';
+        cx.textAlign = 'center';
+        cx.fillText('✓', p.x, p.y + p.r + 10);
+      }
+    } else {
+      // Active particle — moving
+      if(p.isHero){
+        // Hero in motion — golden with bold outline
+        cx.shadowColor = 'rgba(218,165,32,0.4)';
+        cx.shadowBlur = 8;
+        cx.fillStyle = '#DAA520';
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.r + 1, 0, Math.PI*2);
+        cx.fill();
+        cx.shadowBlur = 0;
+        cx.strokeStyle = '#B8860B';
+        cx.lineWidth = 2;
+        cx.stroke();
+      } else {
+        cx.fillStyle = col.main;
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        cx.fill();
+        cx.strokeStyle = 'rgba(0,0,0,0.2)';
+        cx.lineWidth = 1;
+        cx.stroke();
+      }
+    }
+  });
+  
+  // Escaped label (once any has escaped)
+  const escaped = particles.filter(p => p.escaped);
+  if(escaped.length > 0){
+    const lastPt = escaped[0].path[escaped[0].path.length-1];
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 14px "Outfit"';
+    cx.textAlign = 'right';
+    cx.fillText('✗ Not removed (too light)', outletX - 25, lastPt.y - 12);
+  }
+  
+  // Size legend — BELOW the tank, well spaced
+  const lgY = TY + TH + 50;
+  cx.fillStyle = '#e67e22';
+  cx.font = '500 15px "Outfit"';
+  cx.textAlign = 'center';
+  cx.beginPath();cx.arc(TX + 60, lgY - 5, 3.5, 0, Math.PI*2);cx.fill();
+  cx.fillText('Light', TX + 60, lgY + 16);
+  cx.beginPath();cx.arc(TX + 170, lgY - 5, 6.5, 0, Math.PI*2);cx.fill();
+  cx.fillText('Medium', TX + 170, lgY + 16);
+  cx.beginPath();cx.arc(TX + 290, lgY - 5, 10, 0, Math.PI*2);cx.fill();
+  cx.fillText('Heavy', TX + 290, lgY + 16);
+  
+  // Hero legend
+  cx.fillStyle = '#DAA520';
+  cx.beginPath();cx.arc(TX + 430, lgY - 5, 7, 0, Math.PI*2);cx.fill();
+  cx.strokeStyle = '#B8860B';cx.lineWidth = 2;cx.stroke();
+  cx.fillStyle = '#B8860B';
+  cx.fillText('Hero', TX + 430, lgY + 16);
+  
+  // Escaped legend
+  cx.fillStyle = 'rgba(200,50,50,0.4)';
+  cx.beginPath();cx.arc(TX + 560, lgY - 5, 4, 0, Math.PI*2);cx.fill();
+  cx.strokeStyle = '#c0392b';cx.lineWidth = 1.5;
+  cx.beginPath();cx.moveTo(TX+556,lgY-9);cx.lineTo(TX+564,lgY-1);cx.moveTo(TX+564,lgY-9);cx.lineTo(TX+556,lgY-1);cx.stroke();
+  cx.fillStyle = '#c0392b';
+  cx.fillText('Escaped', TX + 560, lgY + 16);
+  
+  cx.fillStyle = '#888';
+  cx.font = '400 14px "Outfit"';
+  cx.fillText('Bigger = Heavier = Settles Faster', TX + TW/2, lgY + 38);
+  
+  drawTypeLegend('Type I — Discrete Settling', col.main, 
+    'Constant velocity • Straight path • Bigger particles settle faster');
+}
+
+function drawType2(){
+  const col = COLORS[2];
+  
+  // Draw free particles (small, scattered, lighter color)
+  if(window.freeParticles){
+    window.freeParticles.forEach(fp => {
+      if(!fp.alive) return;
+      cx.fillStyle = 'rgba(41,128,185,0.3)';
+      cx.beginPath();
+      cx.arc(fp.x, fp.y, fp.r, 0, Math.PI*2);
+      cx.fill();
+      cx.strokeStyle = 'rgba(41,128,185,0.15)';
+      cx.lineWidth = 0.5;
+      cx.stroke();
+    });
+  }
+  
+  // Draw tracer particles and their paths
+  particles.forEach(p => {
+    if(tick < p.delay) return;
+    if(!p.isTracer && p.type !== 2) return;
+    
+    // Draw path — segments with different slopes
+    if(p.path.length > 1){
+      cx.strokeStyle = 'rgba(41,128,185,0.4)';
+      cx.lineWidth = 3;
+      cx.beginPath();
+      p.path.forEach((pt, i) => {
+        if(i === 0) cx.moveTo(pt.x, pt.y);
+        else cx.lineTo(pt.x, pt.y);
+      });
+      cx.stroke();
+    }
+    
+    // Draw merge points — flash circles where collisions happened
+    if(p.mergePoints){
+      p.mergePoints.forEach(mp => {
+        const age = tick - mp.tick;
+        if(age < 60){
+          // Expanding ring flash
+          const ringR = mp.newR + age * 0.3;
+          const alpha = Math.max(0, 0.5 - age * 0.008);
+          cx.strokeStyle = `rgba(255,200,50,${alpha})`;
+          cx.lineWidth = 2;
+          cx.beginPath();
+          cx.arc(mp.x, mp.y, ringR, 0, Math.PI*2);
+          cx.stroke();
+        }
+        // Small dot at merge location (permanent)
+        cx.fillStyle = 'rgba(255,180,30,0.5)';
+        cx.beginPath();
+        cx.arc(mp.x, mp.y, 3, 0, Math.PI*2);
+        cx.fill();
+      });
+    }
+    
+    // Draw the tracer particle itself
+    if(!p.escaped){
+      if(p.settled){
+        cx.fillStyle = 'rgba(41,128,185,0.5)';
+      } else {
+        cx.fillStyle = col.main;
+      }
+      cx.beginPath();
+      cx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      cx.fill();
+      cx.strokeStyle = 'rgba(0,0,0,0.2)';
+      cx.lineWidth = 1.5;
+      cx.stroke();
+      
+      // Settled checkmark
+      if(p.settled){
+        cx.fillStyle = '#27ae60';
+        cx.font = '700 12px "Outfit"';
+        cx.textAlign = 'center';
+        cx.fillText('✓', p.x, p.y + p.r + 12);
+      }
+    }
+  });
+  
+  drawTypeLegend('Type II — Flocculent Settling', col.main,
+    'Particles collide & merge → grow bigger → settle faster → path curves steeper');
+}
+
+function drawType3(){
+  const col = COLORS[3];
+  const sludgeH = window.type3Sludge || 0;
+  
+  // Sludge zone at bottom
+  if(sludgeH > 2){
+    const sGrd = cx.createLinearGradient(0, waterBot - sludgeH, 0, waterBot);
+    sGrd.addColorStop(0, 'rgba(39,140,70,0.2)');
+    sGrd.addColorStop(1, 'rgba(39,120,50,0.45)');
+    cx.fillStyle = sGrd;
+    cx.fillRect(TX+1, waterBot - sludgeH, TW-2, sludgeH);
+    
+    if(sludgeH > 20){
+      cx.fillStyle = 'rgba(20,100,40,0.6)';
+      cx.font = '600 15px "Outfit"';
+      cx.textAlign = 'center';
+      cx.fillText('Accumulated Sludge', TX + TW/2, waterBot - sludgeH/2 + 4);
+    }
+  }
+  
+  // Draw all particles
+  blanketParticles.forEach(bp => {
+    if(bp.escaped) return;
+    
+    if(bp.settled){
+      cx.fillStyle = 'rgba(39,140,70,0.3)';
+    } else {
+      cx.fillStyle = `rgba(39,174,96,${0.4 + Math.random()*0.2})`;
+    }
+    cx.beginPath();
+    cx.arc(bp.x, bp.y, bp.r, 0, Math.PI*2);
+    cx.fill();
+  });
+  
+  // Find interface — look at the density of active particles across horizontal slices
+  const activePs = blanketParticles.filter(bp => !bp.settled && !bp.escaped);
+  if(activePs.length > 40){
+    // Find the approximate top of the dense mass in the middle of the tank
+    const midTankPs = activePs.filter(bp => bp.x > TX + TW*0.3 && bp.x < TX + TW*0.7);
+    if(midTankPs.length > 10){
+      // Sort by y, find where density starts
+      const sorted = midTankPs.map(p => p.y).sort((a,b) => a-b);
+      const topY = sorted[Math.floor(sorted.length * 0.05)]; // 5th percentile
+      
+      if(topY > waterTop + 50){
+        // Clear water label
+        cx.fillStyle = 'rgba(70,140,210,0.4)';
+        cx.font = '600 17px "Outfit"';
+        cx.textAlign = 'center';
+        cx.fillText('Clear Water (Supernatant)', TX + TW/2, (waterTop + topY)/2);
+        
+        // Interface line (dashed, follows the approximate top of the mass)
+        cx.strokeStyle = 'rgba(39,174,96,0.5)';
+        cx.lineWidth = 2;
+        cx.setLineDash([6,4]);
+        cx.beginPath();
+        cx.moveTo(TX + 20, topY);
+        cx.lineTo(TX + TW - 20, topY);
+        cx.stroke();
+        cx.setLineDash([]);
+        
+        cx.fillStyle = col.main;
+        cx.font = '600 14px "Outfit"';
+        cx.fillText('▼ Interface ▼', TX + TW/2, topY - 8);
+      }
+    }
+    
+    // Label the mass
+    cx.fillStyle = 'rgba(30,130,70,0.35)';
+    cx.font = '600 15px "Outfit"';
+    cx.textAlign = 'center';
+    const massCenter = waterBot - sludgeH - 60;
+    if(massCenter > waterTop + 100){
+      cx.fillText('Dense Settling Mass (Moving as Blanket)', TX + TW/2, massCenter);
+    }
+  }
+  
+  drawTypeLegend('Type III — Zone / Hindered Settling', col.main,
+    'Dense particle cloud enters from inlet • Settles as a mass • Sludge accumulates at bottom');
+}
+
+function drawType4(){
+  const col = COLORS[4];
+  
+  // Sludge zone
+  const sludgeTop = waterBot - compressionH;
+  
+  // Clear water above
+  cx.fillStyle = 'rgba(180,220,250,0.1)';
+  cx.fillRect(TX+1, waterTop, TW-2, sludgeTop - waterTop);
+  
+  // Sludge background — darker at bottom (more compressed)
+  const sGrd = cx.createLinearGradient(0, sludgeTop, 0, waterBot);
+  sGrd.addColorStop(0, 'rgba(192,57,43,0.15)');
+  sGrd.addColorStop(1, 'rgba(192,57,43,0.4)');
+  cx.fillStyle = sGrd;
+  cx.fillRect(TX+1, sludgeTop, TW-2, compressionH);
+  
+  // Sludge interface
+  cx.strokeStyle = col.main;
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(TX+5, sludgeTop);
+  cx.lineTo(TX+TW-5, sludgeTop);
+  cx.stroke();
+  
+  // Draw compression particles — denser at bottom
+  compressionParticles.forEach(cp => {
+    const py = sludgeTop + cp.rowFrac * compressionH;
+    const compression = cp.rowFrac; // 0=top, 1=bottom
+    const spacing = 1 - compression * 0.4;
+    if(py > sludgeTop && py < waterBot - 3){
+      const alpha = 0.3 + compression * 0.4;
+      cx.fillStyle = `rgba(192,57,43,${alpha})`;
+      cx.beginPath();
+      cx.arc(cp.x + Math.sin(tick*0.01+cp.wobble)*1, py, cp.r * spacing, 0, Math.PI*2);
+      cx.fill();
+    }
+  });
+  
+  // Draw animated water drops rising from sludge
+  if(window.waterDrops4){
+    window.waterDrops4.forEach(d => {
+      const alpha = Math.min(0.7, d.life / 120);
+      // Water drop — blue teardrop shape
+      cx.fillStyle = `rgba(70,150,220,${alpha})`;
+      cx.beginPath();
+      cx.arc(d.x, d.y + 2, d.r, 0, Math.PI*2);
+      cx.fill();
+      // Teardrop top
+      cx.beginPath();
+      cx.moveTo(d.x - d.r * 0.6, d.y + 1);
+      cx.quadraticCurveTo(d.x, d.y - d.r * 2, d.x + d.r * 0.6, d.y + 1);
+      cx.fill();
+    });
+  }
+  
+  // Water expelled label
+  cx.fillStyle = 'rgba(70,140,210,0.5)';
+  cx.font = '600 17px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('↑ Water being squeezed out ↑', TX + TW/2, sludgeTop - 30);
+  
+  // Small upward arrows
+  cx.fillStyle = 'rgba(70,140,210,0.35)';
+  for(let i=0;i<5;i++){
+    const ax = TX + 100 + i * 130;
+    const ay = sludgeTop - 12;
+    cx.beginPath();
+    cx.moveTo(ax-5, ay+8);
+    cx.lineTo(ax+5, ay+8);
+    cx.lineTo(ax, ay);
+    cx.fill();
+  }
+  
+  // Weight arrows pushing down inside sludge
+  cx.fillStyle = 'rgba(192,57,43,0.3)';
+  for(let i=0;i<4;i++){
+    const ax = TX + 120 + i * 160;
+    const ay = sludgeTop + 15;
+    cx.beginPath();
+    cx.moveTo(ax-5, ay);
+    cx.lineTo(ax+5, ay);
+    cx.lineTo(ax, ay+10);
+    cx.fill();
+  }
+  
+  // Labels
+  cx.fillStyle = 'rgba(192,57,43,0.7)';
+  cx.font = '700 20px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Compressing Sludge', TX + TW/2, sludgeTop + compressionH * 0.35);
+  cx.font = '500 16px "Outfit"';
+  cx.fillText('(Weight compacts lower layers)', TX + TW/2, sludgeTop + compressionH * 0.35 + 20);
+  
+  // Dense zone label
+  cx.fillStyle = 'rgba(150,40,30,0.6)';
+  cx.font = '700 17px "Outfit"';
+  cx.fillText('Dense / Compacted Zone', TX + TW/2, waterBot - compressionH * 0.15);
+  
+  // Clear water label
+  cx.fillStyle = 'rgba(70,140,210,0.4)';
+  cx.font = '600 17px "Outfit"';
+  cx.fillText('Clear Water (Released)', TX + TW/2, (waterTop + sludgeTop)/2);
+  
+  drawTypeLegend('Type IV — Compression Settling', col.main,
+    'Sludge compacts under its own weight • Water squeezed upward • Volume decreases');
+}
+
+function drawCombined(){
+  // Zone boundaries
+  const z1bot = waterTop + TH * 0.25;
+  const z2bot = waterTop + TH * 0.50;
+  const z3bot = waterBot - compressionH;
+  
+  // Zone backgrounds
+  cx.fillStyle = 'rgba(230,126,34,0.04)';
+  cx.fillRect(TX+1, waterTop, TW-2, z1bot - waterTop);
+  cx.fillStyle = 'rgba(41,128,185,0.04)';
+  cx.fillRect(TX+1, z1bot, TW-2, z2bot - z1bot);
+  cx.fillStyle = 'rgba(39,174,96,0.06)';
+  cx.fillRect(TX+1, z2bot, TW-2, z3bot - z2bot);
+  const sGrd = cx.createLinearGradient(0, z3bot, 0, waterBot);
+  sGrd.addColorStop(0, 'rgba(192,57,43,0.1)');
+  sGrd.addColorStop(1, 'rgba(192,57,43,0.3)');
+  cx.fillStyle = sGrd;
+  cx.fillRect(TX+1, z3bot, TW-2, waterBot - z3bot);
+  
+  // Zone labels on the right
+  cx.font = '600 16px "Outfit"';
+  cx.textAlign = 'right';
+  const labelX = TX + TW - 15;
+  cx.fillStyle = COLORS[1].main;
+  cx.fillText('Type I — Discrete', labelX, (waterTop + z1bot)/2 + 5);
+  cx.fillStyle = COLORS[2].main;
+  cx.fillText('Type II — Flocculent', labelX, (z1bot + z2bot)/2 + 5);
+  cx.fillStyle = COLORS[3].main;
+  cx.fillText('Type III — Zone', labelX, (z2bot + z3bot)/2 + 5);
+  cx.fillStyle = COLORS[4].main;
+  cx.fillText('Type IV — Compression', labelX, (z3bot + waterBot)/2 + 5);
+  
+  // Zone boundary dashed lines
+  cx.setLineDash([5,4]);
+  cx.lineWidth = 1;
+  cx.strokeStyle = 'rgba(0,0,0,0.15)';
+  [z1bot, z2bot, z3bot].forEach(y => {
+    cx.beginPath();cx.moveTo(TX+5,y);cx.lineTo(TX+TW-5,y);cx.stroke();
+  });
+  cx.setLineDash([]);
+  
+  // Draw Type I particles (top zone)
+  particles.filter(p => p.type===1).forEach(p => {
+    if(tick < p.delay) return;
+    if(p.path.length > 1){
+      cx.strokeStyle = COLORS[1].light;
+      cx.lineWidth = 2;
+      cx.beginPath();
+      p.path.forEach((pt,i) => { if(i===0)cx.moveTo(pt.x,pt.y);else cx.lineTo(pt.x,pt.y); });
+      cx.stroke();
+    }
+    if(!p.escaped && !p.settled){
+      cx.fillStyle = COLORS[1].main;
+      cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fill();
+    }
+  });
+  
+  // Draw Type II particles (mid zone)
+  particles.filter(p => p.type===2).forEach(p => {
+    if(tick < p.delay) return;
+    if(p.path.length > 1){
+      cx.strokeStyle = COLORS[2].light;
+      cx.lineWidth = 2;
+      cx.beginPath();
+      p.path.forEach((pt,i) => { if(i===0)cx.moveTo(pt.x,pt.y);else cx.lineTo(pt.x,pt.y); });
+      cx.stroke();
+    }
+    if(!p.escaped && !p.settled){
+      cx.fillStyle = COLORS[2].main;
+      cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fill();
+    }
+  });
+  
+  // Type III blanket
+  const bBot = z3bot;
+  cx.strokeStyle = COLORS[3].main;
+  cx.lineWidth = 2;
+  cx.beginPath();cx.moveTo(TX+5,blanketY);cx.lineTo(TX+TW-5,blanketY);cx.stroke();
+  
+  blanketParticles.forEach(bp => {
+    const py = blanketY + bp.baseY;
+    if(py > blanketY && py < bBot){
+      cx.fillStyle = 'rgba(39,174,96,0.35)';
+      cx.beginPath();cx.arc(bp.x, py + Math.sin(tick*0.02+bp.wobble)*1, bp.r, 0, Math.PI*2);cx.fill();
+    }
+  });
+  
+  // Type IV compression particles
+  compressionParticles.forEach(cp => {
+    const py = z3bot + cp.rowFrac * compressionH;
+    if(py > z3bot && py < waterBot - 3){
+      const alpha = 0.3 + cp.rowFrac * 0.4;
+      cx.fillStyle = `rgba(192,57,43,${alpha})`;
+      cx.beginPath();cx.arc(cp.x, py, cp.r, 0, Math.PI*2);cx.fill();
+    }
+  });
+  
+  drawTypeLegend('All Types — Combined View', '#1a2744',
+    'All four settling types occur simultaneously at different depths');
+}
+
+function drawTypeLegend(title, color, subtitle){
+  const ly = TY + TH + 115;
+  cx.fillStyle = color;
+  cx.font = '700 19px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText(title, TX + TW/2, ly);
+  cx.fillStyle = '#666';
+  cx.font = '500 15px "Outfit"';
+  cx.fillText(subtitle, TX + TW/2, ly + 22);
+}
+
+// ========== RENDER ==========
+function render(){
+  tick++;
+  cx.clearRect(0, 0, CW, CH);
+  
+  try {
+    drawTank();
+    
+    if(currentType === 1) drawType1();
+    else if(currentType === 2) drawType2();
+    else if(currentType === 3) drawType3();
+    else if(currentType === 4) drawType4();
+    
+    updateParticles();
+  } catch(e) {
+    cx.fillStyle = '#c00';
+    cx.font = '14px "Outfit"';
+    cx.textAlign = 'left';
+    cx.fillText('Error: ' + e.message, 20, 20);
+    console.error(e);
+  }
+  
+  requestAnimationFrame(render);
+}
+
+// Init
+initParticles();
+updateInfo();
+render();
+</script>
+</body>
+</html>
