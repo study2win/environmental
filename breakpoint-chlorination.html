@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakpoint Chlorination — DPD Titration Simulation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f0f2f5;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:16px 10px}
+.hdr{text-align:center;margin-bottom:12px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:26px;color:#1a2744}
+.hdr p{font-size:12px;color:#7a8599}
+.main{display:flex;gap:14px;justify-content:center;align-items:flex-start;max-width:1200px;width:100%}
+.canvas-wrap{background:#fff;border:1px solid #dde;border-radius:12px;padding:6px}
+canvas{display:block}
+.right-col{width:260px;flex-shrink:0}
+.info-box{background:#fff;border:1px solid #dde;border-radius:12px;padding:14px;margin-bottom:10px}
+.info-box h2{font-family:'Instrument Serif',serif;font-size:15px;color:#1a2744;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:5px}
+.info-desc{font-size:11.5px;color:#4a5568;line-height:1.6}
+.info-highlight{font-weight:700;color:#1a2744}
+.zone-label{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-bottom:4px}
+.btn-action{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;margin-bottom:8px;color:#fff}
+.btn-action:hover{transform:scale(1.02)}
+.btn-action:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+.btn-add{background:#2a5a8a}
+.btn-add:hover:not(:disabled){background:#1e4a7a}
+.btn-reset{background:#888;font-size:12px;padding:8px}
+.btn-reset:hover{background:#666}
+.dose-display{text-align:center;font-size:14px;font-weight:700;color:#1a2744;margin-bottom:10px;padding:8px;background:#f0f4f8;border-radius:8px}
+.step-indicator{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.step-dot{width:18px;height:18px;border-radius:50%;border:2px solid #ccc;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#999}
+.step-dot.done{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.step-dot.current{background:#2a5a8a;border-color:#2a5a8a;color:#fff}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Breakpoint Chlorination — DPD Titration</h1>
+  <p>Created by <strong>SAGAR DODEJA SIR (Ex. IES)</strong></p>
+</div>
+<div class="main">
+  <div class="canvas-wrap">
+    <canvas id="c" width="820" height="700"></canvas>
+  </div>
+  <div class="right-col">
+    <div class="info-box">
+      <h2>Current Step</h2>
+      <div class="dose-display" id="dose-display">Dose: 0.0 mg/L</div>
+      <div class="step-indicator" id="step-dots"></div>
+      <button class="btn-action btn-add" id="btn-add" onclick="startStep()">Add Chlorine (0.2 mg/L)</button>
+      <button class="btn-action btn-reset" onclick="resetAll()">Reset</button>
+    </div>
+    <div class="info-box">
+      <h2>What's Happening</h2>
+      <div class="info-desc" id="info-text">
+        Raw water contains <span class="info-highlight">ammonia (NH₃)</span> and <span class="info-highlight">reducing agents</span> (Fe²⁺, Mn²⁺, H₂S).<br><br>
+        Click the button to add the first dose of chlorine and perform the DPD test.
+      </div>
+    </div>
+    <div class="info-box">
+      <h2>DPD Test Procedure</h2>
+      <div class="info-desc">
+        1. Add chlorine to water sample<br>
+        2. Add <strong>DPD indicator + KI</strong> → water turns <span style="color:#c0392b;font-weight:700">red/pink</span><br>
+        3. Titrate with <strong>FAS</strong> until red colour disappears<br>
+        4. FAS consumed = chlorine residual
+      </div>
+    </div>
+  </div>
+</div>
+<div style="text-align:center;max-width:1200px;width:100%;margin-top:12px;padding:10px 16px;background:#fff;border:1px solid #dde;border-radius:10px;">
+  <p style="font-size:12px;color:#555;line-height:1.6;margin:0;font-family:'Outfit',sans-serif;">
+    <strong>Note:</strong> This is a general chlorination curve in which all aspects are included so that students can visualize. Refer class notes for more depth and clarity.
+  </p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 820, CH = 700;
+
+// Predefined breakpoint curve data
+const curveData = [
+  {dose:0.0, residual:0.0, zone:'none', desc:'No chlorine added.'},
+  {dose:0.2, residual:0.0, zone:'A', desc:'Chlorine consumed by <strong>reducing agents</strong> (Fe²⁺, Mn²⁺, H₂S). All chlorine used up — <strong>zero residual</strong>.'},
+  {dose:0.4, residual:0.05, zone:'B', desc:'Reducing agents mostly consumed. Trace amounts of <strong>chloramines</strong> beginning to form as chlorine reacts with ammonia. Combined residual starting to rise.'},
+  {dose:0.6, residual:0.15, zone:'B', desc:'<strong>Chloramines forming</strong> — monochloramine (NH₂Cl) is the dominant species. Combined residual is <strong>rising</strong>.'},
+  {dose:0.8, residual:0.25, zone:'B', desc:'<strong>Peak combined residual.</strong> Maximum chloramine formation. Both mono- and dichloramine (NHCl₂) present.'},
+  {dose:1.0, residual:0.15, zone:'C', desc:'Excess chlorine is now <strong>oxidizing/destroying</strong> the chloramines. Combined residual is <strong>decreasing</strong>. Approaching breakpoint.'},
+  {dose:1.2, residual:0.1, zone:'BP', desc:'<strong>BREAKPOINT!</strong> Chloramines have been maximally destroyed. Residual is at its <strong>minimum</strong>. Beyond this point, free chlorine will appear.'},
+  {dose:1.4, residual:0.3, zone:'D', desc:'<strong>Free residual chlorine</strong> (HOCl/OCl⁻) now appears. This is the disinfecting chlorine. Residual increases linearly with slope = 1.'},
+  {dose:1.6, residual:0.5, zone:'D', desc:'Free chlorine continues to build. <strong>Linear relationship</strong> — every additional mg/L of dose adds equally to free residual.'},
+  {dose:1.8, residual:0.7, zone:'D', desc:'Sufficient free residual for disinfection. Typical target is 0.2–0.5 mg/L free chlorine at the consumer end.'},
+  {dose:2.0, residual:0.9, zone:'D', desc:'High free residual. Beyond breakpoint, the curve is a <strong>straight line with slope = 1 (45°)</strong>.'}
+];
+
+// State
+let currentStep = 0; // 0 = hasn't started, 1-11 = dose steps
+let plotted = []; // points already on the curve
+let animPhase = 'idle'; // idle, addCl, addDPD, addKI, titrate, plotPoint, done
+let animTimer = 0;
+let animProgress = 0;
+let tick = 0;
+
+// Beaker colors
+let beakerColor = {r:200, g:220, b:240, a:0.3}; // starts as clear water
+let redIntensity = 0; // DPD red color (0-1)
+let lightRedIntensity = 0; // light pink from DPD before KI
+let fasDrops = 0;
+let buretteLevel = 1.0; // 1=full, 0=empty
+let pipetteX = -80; // pipette slides in from left
+
+// Layout — Titration setup
+// Retort stand on the left, burette clamped to it, conical flask below
+const standBaseX = 30, standBaseY = 430;
+const standRodX = 50, standRodTopY = 20;
+
+// Burette: tall thin tube
+const burW = 20, burH = 240;
+const burX = 130, burY = 40; // top of burette
+const burNozzleY = burY + burH; // bottom nozzle
+const stopcockY = burNozzleY + 5;
+
+// Conical flask below burette nozzle
+const flaskCenterX = burX + burW/2;
+const flaskTopY = stopcockY + 55; // neck opening
+const flaskNeckW = 24;
+const flaskNeckH = 30;
+const flaskBodyTopY = flaskTopY + flaskNeckH;
+const flaskBodyH = 100;
+const flaskBotY = flaskBodyTopY + flaskBodyH;
+const flaskBotW = 150;
+
+// Graph
+const GX = 310, GY = 60, GW = 470, GH = 350;
+const graphLeft = GX + 50, graphRight = GX + GW - 20;
+const graphTop = GY + 30, graphBot = GY + GH - 40;
+
+function resetAll(){
+  currentStep = 0;
+  plotted = [];
+  animPhase = 'idle';
+  animTimer = 0;
+  animProgress = 0;
+  redIntensity = 0;
+  lightRedIntensity = 0;
+  fasDrops = 0;
+  buretteLevel = 1.0;
+  pipetteX = -80;
+  beakerColor = {r:200, g:220, b:240, a:0.3};
+  updateUI();
+}
+
+function startStep(){
+  if(animPhase !== 'idle' && animPhase !== 'done') return;
+  if(currentStep >= curveData.length - 1) return;
+  currentStep++;
+  animPhase = 'addCl';
+  animTimer = 0;
+  animProgress = 0;
+  redIntensity = 0;
+  lightRedIntensity = 0;
+  fasDrops = 0;
+  buretteLevel = 1.0;
+  pipetteX = -80;
+  document.getElementById('btn-add').disabled = true;
+  updateUI();
+}
+
+function updateUI(){
+  const nextDose = currentStep < curveData.length - 1 ? curveData[currentStep + 1].dose : null;
+  const btn = document.getElementById('btn-add');
+  
+  if(currentStep >= curveData.length - 1){
+    btn.textContent = 'Curve Complete!';
+    btn.disabled = true;
+  } else if(animPhase === 'idle' || animPhase === 'done'){
+    btn.textContent = `Add Chlorine (${(currentStep < curveData.length - 1 ? curveData[currentStep+1].dose : 0).toFixed(1)} mg/L)`;
+    btn.disabled = false;
+  }
+  
+  // Dose display
+  const dose = currentStep > 0 ? curveData[currentStep].dose : 0;
+  document.getElementById('dose-display').textContent = `Current Dose: ${dose.toFixed(1)} mg/L`;
+  
+  // Step dots
+  let dotsHtml = '';
+  for(let i = 1; i < curveData.length; i++){
+    const cls = i < currentStep ? 'done' : i === currentStep ? 'current' : '';
+    dotsHtml += `<div class="step-dot ${cls}">${i}</div>`;
+  }
+  document.getElementById('step-dots').innerHTML = dotsHtml;
+  
+  // Info text
+  if(currentStep > 0){
+    const d = curveData[currentStep];
+    let zoneHtml = '';
+    if(d.zone === 'A') zoneHtml = '<span class="zone-label" style="background:#fff3e0;color:#e65100">Zone A — Reducing Agents</span>';
+    if(d.zone === 'B') zoneHtml = '<span class="zone-label" style="background:#e3f2fd;color:#1565c0">Zone B — Chloramine Formation</span>';
+    if(d.zone === 'C') zoneHtml = '<span class="zone-label" style="background:#fce4ec;color:#c62828">Zone C — Chloramine Destruction</span>';
+    if(d.zone === 'BP') zoneHtml = '<span class="zone-label" style="background:#f3e5f5;color:#6a1b9a">★ BREAKPOINT</span>';
+    if(d.zone === 'D') zoneHtml = '<span class="zone-label" style="background:#e8f5e9;color:#2e7d32">Zone D — Free Residual</span>';
+    
+    document.getElementById('info-text').innerHTML = zoneHtml + '<br>' + d.desc + 
+      `<br><br><span class="info-highlight">Residual: ${d.residual.toFixed(2)} mg/L</span>`;
+  }
+}
+
+// ========== ANIMATION ==========
+// Pipette target X = above the flask neck
+const pipetteTargetX = flaskCenterX;
+const pipetteStartX = -80;
+const pipetteY = flaskTopY - 25; // height of pipette tip
+
+function updateAnimation(){
+  if(animPhase === 'idle' || animPhase === 'done') return;
+  
+  animTimer++;
+  const d = currentStep > 0 && currentStep < curveData.length ? curveData[currentStep] : null;
+  if(!d){ animPhase = 'done'; return; }
+  
+  if(animPhase === 'addCl'){
+    // Phase: slide pipette in (0-60), drop chlorine (60-160), slide out (160-220)
+    if(animTimer <= 60){
+      // Slide in
+      pipetteX = pipetteStartX + (pipetteTargetX - pipetteStartX) * (animTimer / 60);
+    } else if(animTimer <= 160){
+      // Dropping
+      pipetteX = pipetteTargetX;
+      animProgress = (animTimer - 60) / 100;
+    } else if(animTimer <= 220){
+      // Slide out
+      pipetteX = pipetteTargetX + (pipetteStartX - pipetteTargetX) * ((animTimer - 160) / 60);
+    } else {
+      animPhase = 'addDPD';
+      animTimer = 0;
+      pipetteX = pipetteStartX;
+      animProgress = 0;
+    }
+  }
+  
+  if(animPhase === 'addDPD'){
+    // Phase: slide DPD pipette in (0-60), drop DPD (60-140), slide out (140-200)
+    // Light red develops during drop phase
+    if(animTimer <= 60){
+      pipetteX = pipetteStartX + (pipetteTargetX - pipetteStartX) * (animTimer / 60);
+    } else if(animTimer <= 140){
+      pipetteX = pipetteTargetX;
+      animProgress = (animTimer - 60) / 80;
+      // Light red develops (only if residual > 0)
+      if(d.residual > 0.01){
+        lightRedIntensity = Math.min(0.5, animProgress * (d.residual / 0.8) * 0.8);
+      }
+    } else if(animTimer <= 200){
+      pipetteX = pipetteTargetX + (pipetteStartX - pipetteTargetX) * ((animTimer - 140) / 60);
+    } else {
+      animPhase = 'addKI';
+      animTimer = 0;
+      pipetteX = pipetteStartX;
+      animProgress = 0;
+    }
+  }
+  
+  if(animPhase === 'addKI'){
+    // Phase: slide KI pipette in (0-60), drop KI (60-140), slide out (140-200)
+    // Red deepens during drop phase
+    if(animTimer <= 60){
+      pipetteX = pipetteStartX + (pipetteTargetX - pipetteStartX) * (animTimer / 60);
+    } else if(animTimer <= 140){
+      pipetteX = pipetteTargetX;
+      animProgress = (animTimer - 60) / 80;
+      if(d.residual > 0.01){
+        // Deepen from light red to full red
+        redIntensity = lightRedIntensity + animProgress * (d.residual / 0.8) * 1.0;
+        redIntensity = Math.min(1, redIntensity);
+      }
+    } else if(animTimer <= 200){
+      pipetteX = pipetteTargetX + (pipetteStartX - pipetteTargetX) * ((animTimer - 140) / 60);
+    } else {
+      pipetteX = pipetteStartX;
+      if(d.residual > 0.01){
+        animPhase = 'titrate';
+      } else {
+        animPhase = 'plotPoint';
+      }
+      animTimer = 0;
+      animProgress = 0;
+    }
+  }
+  
+  if(animPhase === 'titrate'){
+    // FAS dripping, red color fading
+    const titrationDuration = 200 + d.residual * 400;
+    animProgress = Math.min(1, animTimer / titrationDuration);
+    const maxRed = lightRedIntensity + (d.residual / 0.8) * 1.0;
+    redIntensity = Math.max(0, maxRed * (1 - animProgress));
+    lightRedIntensity = Math.max(0, lightRedIntensity * (1 - animProgress));
+    buretteLevel = 1 - animProgress * d.residual / 0.8;
+    fasDrops = animTimer;
+    
+    if(animTimer > titrationDuration){
+      animPhase = 'plotPoint';
+      animTimer = 0;
+      redIntensity = 0;
+      lightRedIntensity = 0;
+    }
+  }
+  
+  if(animPhase === 'plotPoint'){
+    animProgress = Math.min(1, animTimer / 80);
+    if(animTimer === 1){
+      plotted.push({dose: d.dose, residual: d.residual, zone: d.zone});
+    }
+    if(animTimer > 80){
+      animPhase = 'done';
+      animTimer = 0;
+      document.getElementById('btn-add').disabled = false;
+      updateUI();
+    }
+  }
+}
+
+// ========== DRAWING ==========
+function drawBeaker(){
+  // === CONICAL FLASK (Erlenmeyer) ===
+  // Neck: narrow tube at top
+  // Body: widens from neck to flat bottom
+  
+  const neckLeft = flaskCenterX - flaskNeckW/2;
+  const neckRight = flaskCenterX + flaskNeckW/2;
+  const bodyLeft = flaskCenterX - flaskBotW/2;
+  const bodyRight = flaskCenterX + flaskBotW/2;
+  
+  // Water fill — 50% of flask body height
+  const waterFrac = 0.5; // fraction of body filled
+  const waterLevel = flaskBotY - flaskBodyH * waterFrac;
+  // At this height, the flask width interpolates between neck and bottom
+  const widthFrac = 1 - waterFrac; // 0 at bottom, 1 at body top
+  const waterHalfW = (flaskBotW/2) - widthFrac * (flaskBotW/2 - flaskNeckW/2);
+  const wlLeft = flaskCenterX - waterHalfW + 2;
+  const wlRight = flaskCenterX + waterHalfW - 2;
+  
+  // Compute water color — light pink from DPD, deeper red from KI
+  let r = 200, g = 220, b = 240, a = 0.35;
+  const totalRed = Math.max(redIntensity, lightRedIntensity);
+  if(totalRed > 0){
+    if(redIntensity > 0){
+      // Full red (after KI added)
+      r = Math.round(200 + 55 * redIntensity);
+      g = Math.round(220 - 160 * redIntensity);
+      b = Math.round(240 - 180 * redIntensity);
+      a = 0.35 + 0.45 * redIntensity;
+    } else if(lightRedIntensity > 0){
+      // Light pink (DPD only, before KI)
+      r = Math.round(200 + 40 * lightRedIntensity);
+      g = Math.round(220 - 60 * lightRedIntensity);
+      b = Math.round(240 - 60 * lightRedIntensity);
+      a = 0.35 + 0.2 * lightRedIntensity;
+    }
+  }
+  
+  // Fill water inside flask body
+  cx.fillStyle = `rgba(${r},${g},${b},${a})`;
+  cx.beginPath();
+  cx.moveTo(wlLeft, waterLevel);
+  cx.lineTo(wlRight, waterLevel);
+  // Slope out to bottom right
+  cx.lineTo(bodyRight - 2, flaskBotY - 2);
+  // Flat bottom
+  cx.lineTo(bodyLeft + 2, flaskBotY - 2);
+  // Slope back up to water level left
+  cx.closePath();
+  cx.fill();
+  
+  // Water surface line
+  cx.strokeStyle = `rgba(${Math.min(255,r)},${Math.min(255,g+40)},${Math.min(255,b+20)},0.5)`;
+  cx.lineWidth = 1.5;
+  cx.beginPath();
+  cx.moveTo(wlLeft, waterLevel);
+  cx.lineTo(wlRight, waterLevel);
+  cx.stroke();
+  
+  // Flask outline
+  cx.strokeStyle = '#4a5a6a';
+  cx.lineWidth = 2.5;
+  cx.beginPath();
+  // Left side: neck top → neck bottom → body bottom-left
+  cx.moveTo(neckLeft, flaskTopY);
+  cx.lineTo(neckLeft, flaskBodyTopY);
+  cx.lineTo(bodyLeft, flaskBotY);
+  // Flat bottom
+  cx.lineTo(bodyRight, flaskBotY);
+  // Right side: body bottom-right → neck bottom → neck top
+  cx.lineTo(neckRight, flaskBodyTopY);
+  cx.lineTo(neckRight, flaskTopY);
+  cx.stroke();
+  
+  // Neck rim (opening) — slight flare
+  cx.beginPath();
+  cx.moveTo(neckLeft - 4, flaskTopY);
+  cx.lineTo(neckLeft, flaskTopY + 4);
+  cx.moveTo(neckRight + 4, flaskTopY);
+  cx.lineTo(neckRight, flaskTopY + 4);
+  cx.strokeStyle = '#4a5a6a';
+  cx.lineWidth = 2;
+  cx.stroke();
+  
+  // Flask label
+  cx.fillStyle = 'rgba(26,39,68,0.3)';
+  cx.font = '500 11px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Conical Flask', flaskCenterX, flaskBotY + 16);
+}
+
+function drawBurette(){
+  // === RETORT STAND ===
+  // Heavy base — symmetric around the rod
+  cx.fillStyle = '#555';
+  const baseW = 60;
+  cx.fillRect(standRodX - baseW/2, standBaseY, baseW, 8);
+  cx.strokeStyle = '#444';
+  cx.lineWidth = 1;
+  cx.strokeRect(standRodX - baseW/2, standBaseY, baseW, 8);
+  
+  // Vertical rod
+  cx.fillStyle = '#666';
+  cx.fillRect(standRodX - 3, standRodTopY, 6, standBaseY - standRodTopY);
+  cx.strokeStyle = '#555';
+  cx.lineWidth = 1;
+  cx.strokeRect(standRodX - 3, standRodTopY, 6, standBaseY - standRodTopY);
+  
+  // Clamp — horizontal arm from rod to burette
+  const clampY = burY + 20;
+  cx.fillStyle = '#777';
+  cx.fillRect(standRodX + 3, clampY - 3, burX - standRodX - 3, 6);
+  // Clamp ring around burette
+  cx.strokeStyle = '#666';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.arc(burX + burW/2, clampY, burW/2 + 5, 0, Math.PI * 2);
+  cx.stroke();
+  
+  // Second clamp lower
+  const clamp2Y = burY + burH * 0.6;
+  cx.fillStyle = '#777';
+  cx.fillRect(standRodX + 3, clamp2Y - 3, burX - standRodX - 3, 6);
+  cx.strokeStyle = '#666';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.arc(burX + burW/2, clamp2Y, burW/2 + 5, 0, Math.PI * 2);
+  cx.stroke();
+  
+  // === BURETTE ===
+  // Glass tube
+  cx.fillStyle = '#e8eaef';
+  cx.fillRect(burX, burY, burW, burH);
+  cx.strokeStyle = '#999';
+  cx.lineWidth = 1.5;
+  cx.strokeRect(burX, burY, burW, burH);
+  
+  // Top opening (wider rim)
+  cx.strokeStyle = '#888';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(burX - 3, burY);
+  cx.lineTo(burX + burW + 3, burY);
+  cx.stroke();
+  
+  // Graduation marks
+  cx.strokeStyle = 'rgba(100,100,120,0.3)';
+  cx.lineWidth = 0.8;
+  for(let i = 0; i < 20; i++){
+    const gy = burY + 10 + i * (burH - 20) / 20;
+    const markW = i % 5 === 0 ? burW * 0.4 : burW * 0.2;
+    cx.beginPath();
+    cx.moveTo(burX + burW - markW, gy);
+    cx.lineTo(burX + burW, gy);
+    cx.stroke();
+  }
+  
+  // FAS liquid inside burette
+  const fasH = burH * buretteLevel;
+  cx.fillStyle = 'rgba(210,200,160,0.5)';
+  cx.fillRect(burX + 2, burY + burH - fasH, burW - 4, fasH - 2);
+  
+  // F A S letters vertically inside the liquid
+  cx.fillStyle = 'rgba(80,70,40,0.5)';
+  cx.font = '700 14px "Outfit"';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  const fasTextTop = burY + burH * 0.3;
+  cx.fillText('F', burX + burW/2, fasTextTop);
+  cx.fillText('A', burX + burW/2, fasTextTop + 22);
+  cx.fillText('S', burX + burW/2, fasTextTop + 44);
+  
+  // Stopcock
+  const scY = burNozzleY;
+  cx.fillStyle = '#888';
+  cx.fillRect(burX - 6, scY, burW + 12, 8);
+  cx.fillStyle = '#aa9944';
+  cx.fillRect(burX + burW + 6, scY - 2, 14, 12);
+  cx.strokeStyle = '#887733';
+  cx.lineWidth = 1;
+  cx.strokeRect(burX + burW + 6, scY - 2, 14, 12);
+  
+  // Nozzle below stopcock — thin tip
+  cx.fillStyle = '#aaa';
+  cx.beginPath();
+  cx.moveTo(burX + burW/2 - 3, scY + 8);
+  cx.lineTo(burX + burW/2 + 3, scY + 8);
+  cx.lineTo(burX + burW/2 + 1, scY + 30);
+  cx.lineTo(burX + burW/2 - 1, scY + 30);
+  cx.closePath();
+  cx.fill();
+  cx.strokeStyle = '#888';
+  cx.lineWidth = 1;
+  cx.stroke();
+  
+  // Drops during titration
+  if(animPhase === 'titrate'){
+    const nozzleTipY = scY + 30;
+    const dropFrac = (fasDrops % 20) / 20;
+    const dropY = nozzleTipY + dropFrac * (flaskTopY - nozzleTipY);
+    if(dropFrac < 0.9){
+      cx.fillStyle = 'rgba(180,170,130,0.8)';
+      cx.beginPath();
+      // Teardrop shape
+      cx.arc(burX + burW/2, dropY + 2, 3, 0, Math.PI * 2);
+      cx.fill();
+      cx.beginPath();
+      cx.moveTo(burX + burW/2 - 2, dropY);
+      cx.quadraticCurveTo(burX + burW/2, dropY - 5, burX + burW/2 + 2, dropY);
+      cx.fill();
+    }
+  }
+}
+
+function drawPipette(){
+  // Draw pipette for addCl, addDPD, addKI phases
+  if(animPhase !== 'addCl' && animPhase !== 'addDPD' && animPhase !== 'addKI') return;
+  
+  // Determine pipette appearance
+  let pipLabel = '';
+  let pipColor = '#888';
+  let dropColor = 'rgba(180,220,100,0.7)';
+  let isDropping = false;
+  
+  if(animPhase === 'addCl'){
+    pipLabel = 'Cl₂';
+    pipColor = '#5a8a30';
+    dropColor = 'rgba(180,220,100,0.8)';
+    isDropping = animTimer > 60 && animTimer <= 160;
+  } else if(animPhase === 'addDPD'){
+    pipLabel = 'DPD';
+    pipColor = '#c0392b';
+    dropColor = 'rgba(220,120,120,0.7)';
+    isDropping = animTimer > 60 && animTimer <= 140;
+  } else if(animPhase === 'addKI'){
+    pipLabel = 'KI';
+    pipColor = '#8a6a20';
+    dropColor = 'rgba(180,160,80,0.7)';
+    isDropping = animTimer > 60 && animTimer <= 140;
+  }
+  
+  const px = pipetteX;
+  const py = pipetteY;
+  
+  // Pipette body — angled glass tube
+  cx.save();
+  cx.translate(px, py);
+  
+  // Rubber bulb at top-left
+  cx.fillStyle = '#d44';
+  cx.beginPath();
+  cx.ellipse(-55, -22, 14, 10, -0.3, 0, Math.PI * 2);
+  cx.fill();
+  cx.strokeStyle = '#a33';
+  cx.lineWidth = 1.5;
+  cx.stroke();
+  
+  // Glass tube — angled from bulb down to tip
+  cx.strokeStyle = 'rgba(150,160,180,0.8)';
+  cx.lineWidth = 8;
+  cx.lineCap = 'round';
+  cx.beginPath();
+  cx.moveTo(-42, -18);
+  cx.lineTo(-5, 0);
+  cx.stroke();
+  
+  // Inner liquid in tube
+  cx.strokeStyle = dropColor;
+  cx.lineWidth = 4;
+  cx.beginPath();
+  cx.moveTo(-38, -16);
+  cx.lineTo(-8, -1);
+  cx.stroke();
+  
+  // Narrow tip
+  cx.strokeStyle = 'rgba(150,160,180,0.8)';
+  cx.lineWidth = 3;
+  cx.beginPath();
+  cx.moveTo(-5, 0);
+  cx.lineTo(0, 5);
+  cx.stroke();
+  
+  // Label on the pipette
+  cx.fillStyle = pipColor;
+  cx.font = '700 12px "Outfit"';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(pipLabel, -25, -30);
+  
+  cx.restore();
+  
+  // Drops falling from pipette tip into flask
+  if(isDropping){
+    const dropPhase = (animTimer * 0.08) % 1;
+    const tipX = px;
+    const tipY = py + 5;
+    const dropTargetY = flaskTopY + 8;
+    
+    // Two staggered drops
+    for(let i = 0; i < 2; i++){
+      const dp = (dropPhase + i * 0.5) % 1;
+      const dy = tipY + dp * (dropTargetY - tipY);
+      if(dp < 0.95){
+        cx.fillStyle = dropColor;
+        cx.beginPath();
+        cx.arc(tipX + (i-0.5)*4, dy, 3, 0, Math.PI*2);
+        cx.fill();
+      }
+    }
+  }
+}
+
+function drawFlaskStatusText(){
+  // Text inside the flask showing what's happening to the water
+  const midY = flaskBodyTopY + flaskBodyH * 0.45;
+  cx.textAlign = 'center';
+  
+  if(animPhase === 'addDPD'){
+    if(lightRedIntensity > 0.05){
+      cx.fillStyle = `rgba(200,80,80,${0.4 + lightRedIntensity})`;
+      cx.font = '700 13px "Outfit"';
+      cx.fillText('Light Pink', flaskCenterX, midY);
+    } else if(curveData[currentStep].residual <= 0.01 && animTimer > 80){
+      cx.fillStyle = '#777';
+      cx.font = '600 12px "Outfit"';
+      cx.fillText('No change', flaskCenterX, midY);
+    }
+  }
+  
+  if(animPhase === 'addKI'){
+    if(redIntensity > 0.1){
+      cx.fillStyle = `rgba(192,40,40,${0.5 + redIntensity * 0.5})`;
+      cx.font = '700 14px "Outfit"';
+      cx.fillText('Turns Darker Red!', flaskCenterX, midY);
+    } else if(curveData[currentStep].residual <= 0.01 && animTimer > 80){
+      cx.fillStyle = '#777';
+      cx.font = '600 12px "Outfit"';
+      cx.fillText('Colourless', flaskCenterX, midY);
+      cx.font = '500 10px "Outfit"';
+      cx.fillText('(zero residual)', flaskCenterX, midY + 15);
+    }
+  }
+  
+  if(animPhase === 'titrate'){
+    if(redIntensity > 0.05){
+      cx.fillStyle = `rgba(192,57,43,${0.3 + redIntensity * 0.7})`;
+      cx.font = '700 13px "Outfit"';
+      cx.fillText('Red fading...', flaskCenterX, midY);
+    } else {
+      cx.fillStyle = '#2e7d32';
+      cx.font = '700 13px "Outfit"';
+      cx.fillText('Colourless!', flaskCenterX, midY);
+    }
+  }
+  
+  if(animPhase === 'plotPoint'){
+    // Don't show anything in the flask — the label is on the curve itself
+  }
+}
+
+function drawPhaseLabel(){
+  // Big prominent status label below the flask — stays during each phase
+  const statusY = flaskBotY + 30;
+  const d = currentStep > 0 && currentStep < curveData.length ? curveData[currentStep] : null;
+  
+  let statusText = '';
+  let statusColor = '#1a2744';
+  let subText = '';
+  
+  if(animPhase === 'idle' && currentStep === 0){
+    statusText = 'Ready to begin';
+    subText = 'Click the button to add chlorine →';
+    statusColor = '#555';
+  } else if(animPhase === 'addCl' && d){
+    statusText = `STEP 1: Adding Chlorine (${d.dose.toFixed(1)} mg/L)`;
+    subText = 'Chlorine is being dosed into the water sample...';
+    statusColor = '#5a8a30';
+  } else if(animPhase === 'addDPD' && d){
+    statusText = 'STEP 2: Adding DPD Indicator';
+    if(d.residual > 0.01){
+      subText = 'Solution turning light pink — chlorine residual present';
+      statusColor = '#c0392b';
+    } else {
+      subText = 'No colour change — zero chlorine residual';
+      statusColor = '#888';
+    }
+  } else if(animPhase === 'addKI' && d){
+    statusText = 'STEP 3: Adding KI (Potassium Iodide)';
+    if(d.residual > 0.01){
+      subText = 'Colour deepening — red intensifies with KI';
+      statusColor = '#8a6a20';
+    } else {
+      subText = 'No colour change — remains colourless';
+      statusColor = '#888';
+    }
+  } else if(animPhase === 'titrate'){
+    statusText = 'STEP 4: Titrating with FAS';
+    subText = 'Adding FAS drop by drop until red colour disappears...';
+    statusColor = '#2a5a8a';
+  } else if(animPhase === 'plotPoint' && d){
+    statusText = `STEP 5: Residual = ${d.residual.toFixed(2)} mg/L`;
+    subText = 'Plotting point on breakpoint curve...';
+    statusColor = '#6a1b9a';
+  } else if(animPhase === 'done' && d){
+    statusText = `Dose ${d.dose.toFixed(1)} mg/L → Residual ${d.residual.toFixed(2)} mg/L`;
+    if(d.zone === 'BP') subText = '★ BREAKPOINT REACHED!';
+    else if(currentStep >= curveData.length - 1) subText = 'Curve complete! All points plotted.';
+    else subText = 'Click button for next dose →';
+    statusColor = '#1a2744';
+  } else if(animPhase === 'idle' && currentStep >= curveData.length - 1){
+    statusText = 'Breakpoint Chlorination Curve Complete!';
+    subText = 'Click Reset to start again';
+    statusColor = '#2e7d32';
+  }
+  
+  if(statusText){
+    // Background box
+    const boxW = 280;
+    const boxH = 50;
+    const boxX = flaskCenterX - boxW/2;
+    const boxY = statusY - 5;
+    cx.fillStyle = 'rgba(255,255,255,0.85)';
+    cx.fillRect(boxX, boxY, boxW, boxH);
+    cx.strokeStyle = statusColor;
+    cx.lineWidth = 2;
+    cx.strokeRect(boxX, boxY, boxW, boxH);
+    
+    // Main text
+    cx.fillStyle = statusColor;
+    cx.font = '700 15px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText(statusText, flaskCenterX, statusY + 14);
+    
+    // Sub text
+    cx.fillStyle = '#555';
+    cx.font = '500 11px "Outfit"';
+    cx.fillText(subText, flaskCenterX, statusY + 32);
+  }
+}
+
+// ========== GRAPH ==========
+function drawGraph(){
+  // Background
+  cx.fillStyle = '#fafbfc';
+  cx.fillRect(GX, GY, GW, GH);
+  cx.strokeStyle = '#ddd';
+  cx.lineWidth = 1;
+  cx.strokeRect(GX, GY, GW, GH);
+  
+  // Title
+  cx.fillStyle = '#1a2744';
+  cx.font = '700 16px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Breakpoint Chlorination Curve', GX + GW/2, GY + 20);
+  
+  // Axes
+  cx.strokeStyle = '#444';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(graphLeft, graphTop);
+  cx.lineTo(graphLeft, graphBot);
+  cx.lineTo(graphRight, graphBot);
+  cx.stroke();
+  
+  // X-axis label
+  cx.fillStyle = '#444';
+  cx.font = '600 13px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Chlorine Dose (mg/L) →', (graphLeft + graphRight)/2, graphBot + 35);
+  
+  // Y-axis label
+  cx.save();
+  cx.translate(graphLeft - 38, (graphTop + graphBot)/2);
+  cx.rotate(-Math.PI/2);
+  cx.fillText('Chlorine Residual (mg/L)', 0, 0);
+  cx.restore();
+  
+  // X-axis ticks
+  cx.font = '500 11px "Outfit"';
+  cx.textAlign = 'center';
+  for(let d = 0; d <= 2.0; d += 0.2){
+    const x = graphLeft + (d / 2.0) * (graphRight - graphLeft);
+    cx.strokeStyle = '#ddd';
+    cx.lineWidth = 1;
+    cx.beginPath();
+    cx.moveTo(x, graphTop);
+    cx.lineTo(x, graphBot);
+    cx.stroke();
+    
+    cx.strokeStyle = '#444';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(x, graphBot);
+    cx.lineTo(x, graphBot + 5);
+    cx.stroke();
+    
+    cx.fillStyle = '#555';
+    cx.fillText(d.toFixed(1), x, graphBot + 18);
+  }
+  
+  // Y-axis ticks
+  cx.textAlign = 'right';
+  for(let r = 0; r <= 0.8; r += 0.1){
+    const y = graphBot - (r / 0.9) * (graphBot - graphTop);
+    cx.strokeStyle = '#eee';
+    cx.lineWidth = 1;
+    cx.beginPath();
+    cx.moveTo(graphLeft, y);
+    cx.lineTo(graphRight, y);
+    cx.stroke();
+    
+    cx.strokeStyle = '#444';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(graphLeft - 5, y);
+    cx.lineTo(graphLeft, y);
+    cx.stroke();
+    
+    cx.fillStyle = '#555';
+    cx.fillText(r.toFixed(1), graphLeft - 8, y + 4);
+  }
+  
+  // Zone shading (only for zones with plotted points)
+  const zones = {};
+  plotted.forEach(p => { if(p.zone) zones[p.zone] = true; });
+  
+  const doseToX = d => graphLeft + (d / 2.0) * (graphRight - graphLeft);
+  const resToY = r => graphBot - (r / 0.9) * (graphBot - graphTop);
+  
+  // Zone backgrounds — progressive, only shade up to the latest plotted point in each zone
+  // Find the max dose plotted in each zone
+  let maxDoseA = -1, maxDoseB = -1, maxDoseC = -1, maxDoseBP = -1, maxDoseD = -1;
+  plotted.forEach(p => {
+    if(p.zone === 'A' && p.dose > maxDoseA) maxDoseA = p.dose;
+    if(p.zone === 'B' && p.dose > maxDoseB) maxDoseB = p.dose;
+    if(p.zone === 'C' && p.dose > maxDoseC) maxDoseC = p.dose;
+    if(p.zone === 'BP' && p.dose > maxDoseBP) maxDoseBP = p.dose;
+    if(p.zone === 'D' && p.dose > maxDoseD) maxDoseD = p.dose;
+  });
+  
+  if(maxDoseA >= 0){
+    cx.fillStyle = 'rgba(255,152,0,0.06)';
+    cx.fillRect(doseToX(0), graphTop, doseToX(maxDoseA) - doseToX(0), graphBot - graphTop);
+  }
+  if(maxDoseB >= 0){
+    const bStart = maxDoseA >= 0 ? maxDoseA : 0.2;
+    cx.fillStyle = 'rgba(33,150,243,0.06)';
+    cx.fillRect(doseToX(bStart), graphTop, doseToX(maxDoseB) - doseToX(bStart), graphBot - graphTop);
+  }
+  if(maxDoseC >= 0){
+    const cStart = maxDoseB >= 0 ? maxDoseB : 0.8;
+    cx.fillStyle = 'rgba(244,67,54,0.06)';
+    cx.fillRect(doseToX(cStart), graphTop, doseToX(maxDoseC) - doseToX(cStart), graphBot - graphTop);
+  }
+  if(maxDoseBP >= 0){
+    const bpStart = maxDoseC >= 0 ? maxDoseC : 1.0;
+    cx.fillStyle = 'rgba(156,39,176,0.06)';
+    cx.fillRect(doseToX(bpStart), graphTop, doseToX(maxDoseBP) - doseToX(bpStart), graphBot - graphTop);
+  }
+  if(maxDoseD >= 0){
+    const dStart = maxDoseBP >= 0 ? maxDoseBP : 1.2;
+    cx.fillStyle = 'rgba(76,175,80,0.06)';
+    cx.fillRect(doseToX(dStart), graphTop, doseToX(maxDoseD) - doseToX(dStart), graphBot - graphTop);
+  }
+  
+  // Breakpoint line — only show after breakpoint is plotted
+  if(maxDoseBP >= 0 || maxDoseD >= 0){
+    cx.setLineDash([6, 4]);
+    cx.strokeStyle = '#9c27b0';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(doseToX(1.2), graphTop);
+    cx.lineTo(doseToX(1.2), graphBot);
+    cx.stroke();
+    cx.setLineDash([]);
+    
+    // Label rotated vertically along the dashed line
+    cx.save();
+    cx.fillStyle = '#9c27b0';
+    cx.font = '700 12px "Outfit"';
+    cx.textAlign = 'center';
+    cx.translate(doseToX(1.2) - 12, (graphTop + graphBot) / 2);
+    cx.rotate(-Math.PI / 2);
+    cx.fillText('BREAKPOINT', 0, 0);
+    cx.restore();
+  }
+  
+  // Zone labels at top — positioned at center of the shaded area so far
+  cx.font = '600 10px "Outfit"';
+  cx.textAlign = 'center';
+  if(maxDoseA >= 0){
+    cx.fillStyle = '#e65100';
+    cx.fillText('Reducing', (doseToX(0)+doseToX(maxDoseA))/2, graphTop + 14);
+    cx.fillText('Agents', (doseToX(0)+doseToX(maxDoseA))/2, graphTop + 26);
+  }
+  if(maxDoseB >= 0){
+    const bStart = maxDoseA >= 0 ? maxDoseA : 0.2;
+    const bMid = (doseToX(bStart)+doseToX(maxDoseB))/2;
+    cx.fillStyle = '#1565c0';
+    cx.fillText('Chloramine +', bMid, graphTop + 14);
+    cx.fillText('Chloro-organic', bMid, graphTop + 26);
+    cx.fillText('Formation', bMid, graphTop + 38);
+  }
+  if(maxDoseC >= 0){
+    const cStart = maxDoseB >= 0 ? maxDoseB : 0.8;
+    cx.fillStyle = '#c62828';
+    cx.fillText('Chloramine', (doseToX(cStart)+doseToX(maxDoseC))/2, graphTop + 14);
+    cx.fillText('Destruction', (doseToX(cStart)+doseToX(maxDoseC))/2, graphTop + 26);
+  }
+  if(maxDoseD >= 0){
+    const dStart = maxDoseBP >= 0 ? maxDoseBP : 1.2;
+    cx.fillStyle = '#2e7d32';
+    cx.fillText('Free', (doseToX(dStart)+doseToX(maxDoseD))/2, graphTop + 14);
+    cx.fillText('Residual', (doseToX(dStart)+doseToX(maxDoseD))/2, graphTop + 26);
+  }
+  
+  // Plot the curve
+  if(plotted.length > 0){
+    // Draw line
+    // Draw line — start from origin (0,0) always
+    cx.strokeStyle = '#2a5a8a';
+    cx.lineWidth = 3;
+    cx.beginPath();
+    cx.moveTo(doseToX(0), resToY(0)); // start from origin
+    plotted.forEach((p, i) => {
+      const x = doseToX(p.dose);
+      const y = resToY(p.residual);
+      cx.lineTo(x, y);
+    });
+    cx.stroke();
+    
+    // Draw points
+    plotted.forEach((p, i) => {
+      const x = doseToX(p.dose);
+      const y = resToY(p.residual);
+      
+      // Point color by zone
+      let color = '#2a5a8a';
+      if(p.zone === 'A') color = '#e65100';
+      if(p.zone === 'B') color = '#1565c0';
+      if(p.zone === 'C') color = '#c62828';
+      if(p.zone === 'BP') color = '#9c27b0';
+      if(p.zone === 'D') color = '#2e7d32';
+      
+      cx.fillStyle = color;
+      cx.beginPath();
+      cx.arc(x, y, 6, 0, Math.PI*2);
+      cx.fill();
+      cx.strokeStyle = '#fff';
+      cx.lineWidth = 2;
+      cx.stroke();
+      
+      // Highlight current point being plotted
+      if(i === plotted.length - 1 && animPhase === 'plotPoint'){
+        // Pulsing outer ring
+        const pulse = 1 + 0.3 * Math.sin(tick * 0.1);
+        cx.strokeStyle = color;
+        cx.lineWidth = 3;
+        cx.beginPath();
+        cx.arc(x, y, 16 * pulse, 0, Math.PI*2);
+        cx.stroke();
+        
+        // Label below the point — clamped to stay in graph
+        const labelText = `${p.dose.toFixed(1)} mg/L → ${p.residual.toFixed(2)} mg/L`;
+        cx.font = '700 13px "Outfit"';
+        const tw = cx.measureText(labelText).width;
+        
+        // Position label below point, but if too close to bottom, put it above
+        let labelY = y + 25;
+        let arrowDir = 1; // 1 = below, -1 = above
+        if(labelY + 15 > graphBot - 5){
+          labelY = y - 25;
+          arrowDir = -1;
+        }
+        // Clamp horizontally
+        let labelX = Math.max(graphLeft + tw/2 + 8, Math.min(graphRight - tw/2 - 8, x));
+        
+        // Background box
+        cx.fillStyle = 'rgba(255,255,255,0.92)';
+        cx.fillRect(labelX - tw/2 - 6, labelY - 10, tw + 12, 22);
+        cx.strokeStyle = color;
+        cx.lineWidth = 1.5;
+        cx.strokeRect(labelX - tw/2 - 6, labelY - 10, tw + 12, 22);
+        
+        // Text
+        cx.fillStyle = color;
+        cx.textAlign = 'center';
+        cx.fillText(labelText, labelX, labelY + 5);
+        
+        // Arrow from label to point
+        cx.strokeStyle = color;
+        cx.lineWidth = 1.5;
+        cx.beginPath();
+        if(arrowDir === 1){
+          cx.moveTo(x, y + 8);
+          cx.lineTo(x, labelY - 11);
+        } else {
+          cx.moveTo(x, y - 8);
+          cx.lineTo(x, labelY + 13);
+        }
+        cx.stroke();
+      }
+    });
+  }
+  
+  // Watermark
+  cx.fillStyle = 'rgba(26,39,68,0.06)';
+  cx.font = '500 10px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('SAGAR DODEJA SIR (Ex. IES)', GX + GW/2, GY + GH - 10);
+}
+
+// ========== RENDER ==========
+function render(){
+  tick++;
+  cx.clearRect(0, 0, CW, CH);
+  
+  updateAnimation();
+  
+  drawBeaker();
+  drawBurette();
+  drawPipette();
+  drawFlaskStatusText();
+  drawPhaseLabel();
+  drawGraph();
+  
+  requestAnimationFrame(render);
+}
+
+updateUI();
+render();
+</script>
+</body>
+</html>
