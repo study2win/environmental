@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gravity Dam — Base Stress Distribution</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fefefe;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px 12px;min-height:100vh}
+.hdr{text-align:center;margin-bottom:16px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:28px;color:#1b2a4a;margin-bottom:2px}
+.hdr p{font-size:13px;color:#7a8599}
+.main{display:flex;gap:20px;justify-content:center;align-items:flex-start;width:100%;max-width:1200px}
+.left-col{width:280px;flex-shrink:0}
+.panel{background:#f8f7f5;border:1px solid #e0dcd6;border-radius:14px;padding:18px;width:280px;margin-bottom:14px}
+.panel h2{font-family:'Instrument Serif',serif;font-size:18px;color:#1b2a4a;margin-bottom:14px;border-bottom:1px solid #e0dcd6;padding-bottom:8px}
+.slider-group{margin-bottom:14px}
+.slider-group label{display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:#4a5568;margin-bottom:4px}
+.slider-group label span{font-weight:700;color:#1b2a4a}
+input[type=range]{width:100%;height:6px;-webkit-appearance:none;appearance:none;background:#d4cfc6;border-radius:3px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#3a6b9f;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+.results{background:#f8f7f5;border:1px solid #e0dcd6;border-radius:14px;padding:18px;width:280px;height:500px;overflow-y:auto}
+.results h2{font-family:'Instrument Serif',serif;font-size:18px;color:#1b2a4a;margin-bottom:14px;border-bottom:1px solid #e0dcd6;padding-bottom:8px}
+.result-row{display:flex;justify-content:space-between;font-size:13px;color:#4a5568;margin-bottom:8px;padding:4px 0}
+.result-row .val{font-weight:700;color:#1b2a4a}
+.result-row.warn .val{color:#c0392b}
+.result-row.safe .val{color:#27ae60}
+.status-box{margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;text-align:center}
+.status-box.safe{background:#d4edda;color:#1a5a2a;border:1px solid #a3d9b1}
+.status-box.warn{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.status-box.danger{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.canvas-wrap{background:#fff;border:1px solid #e0dcd6;border-radius:14px;padding:8px;box-shadow:0 2px 10px rgba(0,0,0,0.04);width:780px;flex-shrink:0}
+canvas{display:block;width:780px;height:950px}
+.formula-box{margin-top:12px;background:#f0ede8;border-radius:8px;padding:10px 14px;font-size:12px;color:#4a5568;line-height:1.6}
+.formula-box .eq{font-family:'Courier New',monospace;font-weight:700;color:#1b2a4a;font-size:13px}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Gravity Dam — Base Stress Distribution</h1>
+  <p>Created by <strong>SAGAR DODEJA SIR (Ex. IES)</strong></p>
+</div>
+<div class="main">
+  <div class="left-col">
+    <div class="panel">
+      <h2>Dam Parameters</h2>
+      <div class="slider-group">
+        <label>Dam Height (H') <span id="v-H">30</span> m</label>
+        <input type="range" id="s-H" min="10" max="60" value="30" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Base Width (B) <span id="v-B">24</span> m</label>
+        <input type="range" id="s-B" min="8" max="50" value="24" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Top Width (T) <span id="v-T">6</span> m</label>
+        <input type="range" id="s-T" min="2" max="15" value="6" step="0.5">
+      </div>
+      <div class="slider-group">
+        <label>Head Water Level (H) <span id="v-h">27</span> m</label>
+        <input type="range" id="s-h" min="0" max="60" value="27" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Concrete Density (γc) <span id="v-gc">24</span> kN/m³</label>
+        <input type="range" id="s-gc" min="20" max="28" value="24" step="0.5">
+      </div>
+      <div class="slider-group">
+        <label>Water Density (γw) <span id="v-gw">9.81</span> kN/m³</label>
+        <input type="range" id="s-gw" min="9.5" max="10.5" value="9.81" step="0.01">
+      </div>
+      <div class="slider-group">
+        <label>Uplift Coefficient (C) <span id="v-C">1.0</span></label>
+        <input type="range" id="s-C" min="0" max="1" value="1.0" step="0.1">
+      </div>
+      <div class="slider-group">
+        <label>Tail Water Level (h) <span id="v-ht">0</span> m</label>
+        <input type="range" id="s-ht" min="0" max="30" value="0" step="1">
+      </div>
+    </div>
+    <div class="results" id="results-panel">
+      <h2>Calculated Results</h2>
+      <div id="results-content"></div>
+    </div>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="c" width="780" height="950"></canvas>
+    <div class="formula-box">
+      <div class="eq">p = (ΣV / B) × (1 ± 6e/B)</div>
+      Where: ΣV = total vertical force, B = base width, e = eccentricity of resultant from center of base.<br>
+      p_toe (max) uses +, p_heel (min) uses −. Tension occurs when e > B/6 (resultant outside middle third).<br>
+      <strong>Notation:</strong> H' = dam height, H = head water (upstream) level, h = tail water (downstream) level, P_H = upstream water pressure, P_h = tail water pressure.<br>
+      <strong>Note:</strong> The weight of the tail water standing above the sloped downstream face of the dam body has been ignored in these calculations.
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 780, CH = 950;
+
+// Sliders
+const sliders = {
+  H: document.getElementById('s-H'),
+  B: document.getElementById('s-B'),
+  T: document.getElementById('s-T'),
+  h: document.getElementById('s-h'),
+  gc: document.getElementById('s-gc'),
+  gw: document.getElementById('s-gw'),
+  C: document.getElementById('s-C'),
+  ht: document.getElementById('s-ht')
+};
+
+// Attach listeners
+Object.keys(sliders).forEach(k => {
+  sliders[k].addEventListener('input', () => {
+    // Clamp water levels to dam height
+    if(k === 'H'){
+      const H = parseFloat(sliders.H.value);
+      if(parseFloat(sliders.h.value) > H) sliders.h.value = H;
+      if(parseFloat(sliders.ht.value) > H) sliders.ht.value = H;
+      sliders.h.max = H;
+      sliders.ht.max = H;
+    }
+    update();
+  });
+});
+
+function getParams(){
+  return {
+    H: parseFloat(sliders.H.value),
+    B: parseFloat(sliders.B.value),
+    T: parseFloat(sliders.T.value),
+    h: parseFloat(sliders.h.value),
+    gc: parseFloat(sliders.gc.value),
+    gw: parseFloat(sliders.gw.value),
+    C: parseFloat(sliders.C.value),
+    ht: parseFloat(sliders.ht.value)
+  };
+}
+
+function calculate(p){
+  const {H, B, T, h, gc, gw, C, ht} = p;
+  
+  // === DAM GEOMETRY ===
+  const rectArea = T * H;
+  const triArea = (B - T) * H / 2;
+  const damArea = rectArea + triArea;
+  const W = gc * damArea;
+  
+  const rectCG_fromToe = B - T/2;
+  const triCG_fromToe = 2 * (B - T) / 3;
+  const xW = (rectArea * rectCG_fromToe + triArea * triCG_fromToe) / damArea;
+  
+  // 2. Horizontal water pressure from upstream (pushes downstream)
+  const Ph = gw * h * h / 2;
+  const yPh = h / 3;
+  
+  // 2b. Horizontal water pressure from TAIL WATER (pushes upstream — stabilizing)
+  const Ph_tail = gw * ht * ht / 2;
+  const yPh_tail = ht / 3;
+  
+  // 3. Uplift pressure — MODIFIED for tail water
+  // Pressure at heel = γw × h (upstream water head)
+  // Pressure at toe = γw × h' (tail water head)
+  // Uplift is now trapezoidal, not triangular
+  // Apply coefficient C to the differential
+  const pUp_heel = C * gw * h;
+  const pUp_toe = C * gw * ht;
+  const U = (pUp_heel + pUp_toe) / 2 * B; // trapezoidal area
+  
+  // Centroid of trapezoidal uplift from toe
+  // x_bar = B/3 × (2p1 + p2)/(p1 + p2) where p1=pUp_heel, p2=pUp_toe (measured from heel)
+  // We need it from toe, so: xU = B - B/3 × (2*pUp_heel + pUp_toe)/(pUp_heel + pUp_toe)
+  let xU;
+  if(pUp_heel + pUp_toe > 0.001){
+    const xFromHeel = (B / 3) * (2 * pUp_heel + pUp_toe) / (pUp_heel + pUp_toe);
+    xU = B - xFromHeel;
+  } else {
+    xU = B / 2;
+  }
+  
+  // === SUM OF VERTICAL FORCES ===
+  const sumV = W - U;
+  
+  // Guard: if sumV <= 0, dam is floating/unstable
+  if(sumV <= 0){
+    return {
+      W, Ph, Ph_tail, U, sumV,
+      xW, yPh, yPh_tail, xU,
+      M_stabilizing: W * xW, M_overturning: Ph * yPh + U * xU, M_net: 0,
+      xBar: B/2, e: 0, middleThirdLimit: B/6, insideMiddleThird: false,
+      pToe: 0, pHeel: 0,
+      FOS_overturning: 0, FOS_sliding: 0,
+      damArea, unstable: true
+    };
+  }
+  
+  // === MOMENTS ABOUT TOE ===
+  const M_W = W * xW;
+  const M_Ph = Ph * yPh;              // overturning
+  const M_Ph_tail = Ph_tail * yPh_tail; // stabilizing (opposes Ph)
+  const M_U = U * xU;
+  
+  const M_stabilizing = M_W + M_Ph_tail;
+  const M_overturning = M_Ph + M_U;
+  const M_net = M_stabilizing - M_overturning;
+  
+  // Position of resultant from toe
+  let xBar = M_net / sumV;
+  xBar = Math.max(-B * 2, Math.min(B * 3, xBar));
+  
+  const e = B/2 - xBar;
+  const middleThirdLimit = B / 6;
+  const insideMiddleThird = Math.abs(e) <= middleThirdLimit;
+  
+  let pToe = (sumV / B) * (1 + 6 * e / B);
+  let pHeel = (sumV / B) * (1 - 6 * e / B);
+  
+  // FOS
+  const netHorizontal = Ph - Ph_tail; // net horizontal force
+  const FOS_overturning = M_overturning > 0 ? M_stabilizing / M_overturning : 999;
+  const mu = 0.7;
+  const FOS_sliding = netHorizontal > 0 ? mu * sumV / netHorizontal : 999;
+  
+  return {
+    W, Ph, Ph_tail, U, sumV,
+    xW, yPh, yPh_tail, xU,
+    M_stabilizing, M_overturning, M_net,
+    xBar, e, middleThirdLimit, insideMiddleThird,
+    pToe, pHeel,
+    FOS_overturning, FOS_sliding,
+    damArea
+  };
+}
+
+function update(){
+  const p = getParams();
+  
+  // Update display values
+  Object.keys(sliders).forEach(k => {
+    document.getElementById('v-'+k).textContent = sliders[k].value;
+  });
+  
+  // Clamp water level
+  if(p.h > p.H) { p.h = p.H; sliders.h.value = p.H; document.getElementById('v-h').textContent = p.H; }
+  
+  const r = calculate(p);
+  
+  // Update results panel
+  updateResults(p, r);
+  
+  // Draw
+  draw(p, r);
+}
+
+function updateResults(p, r){
+  let html = '';
+  
+  html += `<div class="result-row"><span>Self Weight (W)</span><span class="val">${r.W.toFixed(1)} kN/m</span></div>`;
+  html += `<div class="result-row"><span>Water Pressure (P_H)</span><span class="val">${r.Ph.toFixed(1)} kN/m</span></div>`;
+  if(p.ht > 0){
+    html += `<div class="result-row"><span>Tail Water (P_h)</span><span class="val">${r.Ph_tail.toFixed(1)} kN/m</span></div>`;
+  }
+  html += `<div class="result-row"><span>Uplift Force (U)</span><span class="val">${r.U.toFixed(1)} kN/m</span></div>`;
+  html += `<div class="result-row ${r.sumV<=0?'warn':''}"><span>Net Vertical (ΣV)</span><span class="val">${r.sumV.toFixed(1)} kN/m</span></div>`;
+  
+  if(r.unstable){
+    html += `<div class="status-box danger">⚠ DAM UNSTABLE — Uplift force (${r.U.toFixed(0)} kN/m) exceeds self weight (${r.W.toFixed(0)} kN/m). Net vertical force is negative.</div>`;
+    document.getElementById('results-content').innerHTML = html;
+    return;
+  }
+  
+  const tension = r.pHeel < 0 || r.pToe < 0;
+  
+  html += `<div class="result-row"><span>Resultant from Toe (x̄)</span><span class="val">${r.xBar.toFixed(2)} m</span></div>`;
+  html += `<div class="result-row ${r.insideMiddleThird?'safe':'warn'}"><span>Eccentricity (e)</span><span class="val">${r.e.toFixed(2)} m</span></div>`;
+  html += `<div class="result-row"><span>Middle Third (B/6)</span><span class="val">±${r.middleThirdLimit.toFixed(2)} m</span></div>`;
+  html += `<div class="result-row ${tension?'warn':'safe'}"><span>Stress at Toe (p_toe)</span><span class="val">${r.pToe.toFixed(1)} kN/m²</span></div>`;
+  html += `<div class="result-row ${tension?'warn':'safe'}"><span>Stress at Heel (p_heel)</span><span class="val">${r.pHeel.toFixed(1)} kN/m²</span></div>`;
+  html += `<div class="result-row"><span>FOS (Overturning)</span><span class="val">${r.FOS_overturning.toFixed(2)}</span></div>`;
+  html += `<div class="result-row"><span>FOS (Sliding)</span><span class="val">${r.FOS_sliding.toFixed(2)}</span></div>`;
+  
+  if(tension){
+    html += `<div class="status-box danger">⚠ TENSION at ${r.pHeel < 0 ? 'heel' : 'toe'} — Resultant outside middle third</div>`;
+  } else if(Math.abs(r.e) > r.middleThirdLimit * 0.85){
+    html += `<div class="status-box warn">⚡ Near limit — Resultant close to edge of middle third</div>`;
+  } else {
+    html += `<div class="status-box safe">✓ Safe — Resultant within middle third, no tension at base</div>`;
+  }
+  
+  document.getElementById('results-content').innerHTML = html;
+}
+
+// ========== DRAWING ==========
+function draw(p, r){
+  cx.clearRect(0, 0, CW, CH);
+  cx.fillStyle = '#fefefe';
+  cx.fillRect(0, 0, CW, CH);
+  
+  const {H, B, T, h, gw} = p;
+  
+  // Scale and positioning — ensure dam + stress diagram always fits
+  const margin = 50;
+  const stressSpace = 320; // space needed below base for stress diagram
+  const availableH = CH - margin - stressSpace;
+  const scale = Math.min(availableH / H, (CW - 200) / (B + 20));
+  
+  // Base line position
+  const baseY = margin + H * scale;
+  const toeX = CW / 2 + B * scale / 3; // toe (downstream) shifted right
+  const heelX = toeX - B * scale; // heel (upstream)
+  
+  // Dam vertices
+  // Upstream face: vertical or slightly sloped
+  // Top-left (upstream top), top-right (downstream top), bottom-right (toe), bottom-left (heel)
+  const topUpstreamX = heelX; // upstream face is vertical from heel
+  const topDownstreamX = topUpstreamX + T * scale;
+  const topY = baseY - H * scale;
+  
+  // === GROUND ===
+  // Just hatch lines below the base — no fill color
+  cx.strokeStyle = '#b0a898';
+  cx.lineWidth = 1;
+  for(let i = heelX - 80; i < CW; i += 12){
+    cx.beginPath();
+    cx.moveTo(i, baseY);
+    cx.lineTo(i - 8, baseY + 12);
+    cx.stroke();
+  }
+  
+  // === WATER (upstream side) ===
+  if(h > 0){
+    const waterTopY = baseY - h * scale;
+    cx.fillStyle = 'rgba(70, 140, 210, 0.25)';
+    cx.beginPath();
+    cx.moveTo(heelX - 80, waterTopY);
+    cx.lineTo(heelX, waterTopY);
+    cx.lineTo(heelX, baseY);
+    cx.lineTo(heelX - 80, baseY);
+    cx.closePath();
+    cx.fill();
+    
+    // Water surface
+    cx.strokeStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(heelX - 80, waterTopY);
+    cx.lineTo(heelX, waterTopY);
+    cx.stroke();
+    
+    // Water level label
+    cx.fillStyle = '#2a6a9a';
+    cx.font = '500 14px "Outfit"';
+    cx.textAlign = 'right';
+    cx.fillText(`H = ${h} m`, heelX - 10, waterTopY + 15);
+    
+    // Hydrostatic pressure triangle (on upstream face)
+    cx.fillStyle = 'rgba(50, 120, 190, 0.12)';
+    cx.beginPath();
+    cx.moveTo(heelX, waterTopY);
+    cx.lineTo(heelX, baseY);
+    cx.lineTo(heelX - h * scale * 0.3, baseY);
+    cx.closePath();
+    cx.fill();
+    
+    // Pressure arrows
+    cx.strokeStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.fillStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.lineWidth = 1.5;
+    const arrowCount = Math.min(6, Math.floor(h / 5));
+    for(let i = 1; i <= arrowCount; i++){
+      const frac = i / (arrowCount + 1);
+      const ay = waterTopY + frac * h * scale;
+      const aLen = frac * h * scale * 0.3;
+      cx.beginPath();
+      cx.moveTo(heelX - aLen, ay);
+      cx.lineTo(heelX - 6, ay);
+      cx.stroke();
+      // Arrow head
+      cx.beginPath();
+      cx.moveTo(heelX - 6, ay);
+      cx.lineTo(heelX - 12, ay - 3);
+      cx.lineTo(heelX - 12, ay + 3);
+      cx.fill();
+    }
+    
+    cx.fillStyle = '#2a6a9a';
+    cx.font = '500 13px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText('P_H', heelX - h * scale * 0.18, baseY + 15);
+  }
+  
+  // === TAIL WATER (downstream side) ===
+  if(p.ht > 0){
+    const tailTopY = baseY - p.ht * scale;
+    
+    // Find intersection of water surface with sloped downstream face
+    // Slope goes from (topDownstreamX, topY) at top to (toeX, baseY) at bottom
+    const slopeFrac = p.ht / H;
+    const intersectX = toeX - (toeX - topDownstreamX) * slopeFrac;
+    
+    // Tail water body — follows sloped face on left, extends right
+    cx.fillStyle = 'rgba(70, 140, 210, 0.25)';
+    cx.beginPath();
+    cx.moveTo(intersectX, tailTopY);      // water meets sloped face
+    cx.lineTo(toeX + 100, tailTopY);       // water surface to the right
+    cx.lineTo(toeX + 100, baseY);          // down to base
+    cx.lineTo(toeX, baseY);                // along base back to toe
+    cx.lineTo(intersectX, tailTopY);       // up along slope (closes)
+    cx.closePath();
+    cx.fill();
+    
+    // Tail water surface line
+    cx.strokeStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(intersectX, tailTopY);
+    cx.lineTo(toeX + 100, tailTopY);
+    cx.stroke();
+    
+    // Label
+    cx.fillStyle = '#2a6a9a';
+    cx.font = '500 14px "Outfit"';
+    cx.textAlign = 'left';
+    cx.fillText(`h = ${p.ht} m`, toeX + 10, tailTopY + 15);
+    
+    // Horizontal pressure distribution — kept as is (drawn vertically at toe)
+    cx.fillStyle = 'rgba(50, 120, 190, 0.12)';
+    cx.beginPath();
+    cx.moveTo(toeX, tailTopY);
+    cx.lineTo(toeX, baseY);
+    cx.lineTo(toeX + p.ht * scale * 0.3, baseY);
+    cx.closePath();
+    cx.fill();
+    
+    // Pressure arrows (pointing left — stabilizing)
+    cx.strokeStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.fillStyle = 'rgba(50, 120, 190, 0.5)';
+    cx.lineWidth = 1.5;
+    const tailArrowCount = Math.min(4, Math.floor(p.ht / 5));
+    for(let i = 1; i <= tailArrowCount; i++){
+      const frac = i / (tailArrowCount + 1);
+      const ay = tailTopY + frac * p.ht * scale;
+      const aLen = frac * p.ht * scale * 0.3;
+      cx.beginPath();
+      cx.moveTo(toeX + 6, ay);
+      cx.lineTo(toeX + aLen, ay);
+      cx.stroke();
+      cx.beginPath();
+      cx.moveTo(toeX + 6, ay);
+      cx.lineTo(toeX + 12, ay - 3);
+      cx.lineTo(toeX + 12, ay + 3);
+      cx.fill();
+    }
+    
+    cx.fillStyle = '#2a6a9a';
+    cx.font = '500 13px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText('P_h', toeX + p.ht * scale * 0.18, baseY + 15);
+  }
+  
+  // === DAM BODY ===
+  cx.beginPath();
+  cx.moveTo(topUpstreamX, topY);
+  cx.lineTo(topDownstreamX, topY);
+  cx.lineTo(toeX, baseY);
+  cx.lineTo(heelX, baseY);
+  cx.closePath();
+  
+  const damGrd = cx.createLinearGradient(heelX, topY, toeX, baseY);
+  damGrd.addColorStop(0, '#b8b0a0');
+  damGrd.addColorStop(0.5, '#a8a090');
+  damGrd.addColorStop(1, '#989080');
+  cx.fillStyle = damGrd;
+  cx.fill();
+  cx.strokeStyle = '#5a5550';
+  cx.lineWidth = 2;
+  cx.stroke();
+  
+  // Name watermark inside dam body
+  cx.save();
+  cx.fillStyle = 'rgba(255,255,255,0.35)';
+  cx.font = '600 11px "Outfit"';
+  cx.textAlign = 'center';
+  const wmX = heelX + (toeX - heelX) * 0.45;
+  const wmY = topY + (baseY - topY) * 0.25;
+  cx.fillText('SAGAR DODEJA SIR (Ex. IES)', wmX, wmY);
+  cx.restore();
+  
+  // Dam dimensions
+  cx.fillStyle = '#4a4a5a';
+  cx.font = '500 14px "Outfit"';
+  cx.textAlign = 'center';
+  
+  // Height dimension (right side)
+  cx.setLineDash([3, 3]);
+  cx.strokeStyle = '#7a7a8a';
+  cx.lineWidth = 1;
+  cx.beginPath();
+  cx.moveTo(toeX + 25, topY);
+  cx.lineTo(toeX + 25, baseY);
+  cx.stroke();
+  cx.setLineDash([]);
+  cx.fillText(`H' = ${H} m`, toeX + 50, topY + H * scale / 2 + 5);
+  // Arrows
+  cx.fillStyle = '#7a7a8a';
+  cx.beginPath(); cx.moveTo(toeX+22, topY+5); cx.lineTo(toeX+25, topY); cx.lineTo(toeX+28, topY+5); cx.fill();
+  cx.beginPath(); cx.moveTo(toeX+22, baseY-5); cx.lineTo(toeX+25, baseY); cx.lineTo(toeX+28, baseY-5); cx.fill();
+  
+  // Top width
+  cx.fillStyle = '#4a4a5a';
+  cx.fillText(`T = ${T} m`, (topUpstreamX + topDownstreamX) / 2, topY - 10);
+  
+  // Base width — placed inside dam body, just above the base, shifted LEFT to leave room for resultant
+  cx.fillStyle = '#2a3a5a';
+  cx.fillText(`B = ${B} m`, heelX + (toeX - heelX) * 0.25, baseY - 8);
+  cx.setLineDash([3, 3]);
+  cx.strokeStyle = '#5a6578';
+  cx.lineWidth = 1;
+  cx.beginPath();
+  cx.moveTo(heelX + 4, baseY - 20);
+  cx.lineTo(toeX - 4, baseY - 20);
+  cx.stroke();
+  cx.setLineDash([]);
+  cx.fillStyle = '#5a6578';
+  cx.beginPath(); cx.moveTo(heelX+9, baseY-23); cx.lineTo(heelX+4, baseY-20); cx.lineTo(heelX+9, baseY-17); cx.fill();
+  cx.beginPath(); cx.moveTo(toeX-9, baseY-23); cx.lineTo(toeX-4, baseY-20); cx.lineTo(toeX-9, baseY-17); cx.fill();
+  
+  // Labels: Toe and Heel
+  cx.fillStyle = '#2a3a5a';
+  cx.font = '600 16px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Toe', toeX, baseY + 65);
+  cx.fillText('Heel', heelX, baseY + 65);
+  
+  // Upstream / Downstream labels — placed at top, above dam
+  cx.font = '500 14px "Outfit"';
+  cx.fillStyle = '#5a6578';
+  cx.fillText('Upstream ←', heelX - 45, topY - 25);
+  cx.fillText('→ Downstream', toeX + 55, topY - 25);
+  
+  // === UPLIFT PRESSURE (trapezoidal due to tail water) ===
+  if(p.C > 0 && (h > 0 || p.ht > 0)){
+    const upliftHeelH = p.C * h * scale * 0.2;
+    const upliftToeH = p.C * p.ht * scale * 0.2;
+    cx.fillStyle = 'rgba(180, 80, 80, 0.12)';
+    cx.beginPath();
+    cx.moveTo(heelX, baseY);
+    cx.lineTo(heelX, baseY + upliftHeelH);
+    cx.lineTo(toeX, baseY + upliftToeH);
+    cx.lineTo(toeX, baseY);
+    cx.closePath();
+    cx.fill();
+    
+    cx.strokeStyle = 'rgba(180, 80, 80, 0.4)';
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    cx.moveTo(heelX, baseY + upliftHeelH);
+    cx.lineTo(toeX, baseY + upliftToeH);
+    cx.stroke();
+    
+    // Uplift arrows — vertical shaft from sloped bottom, arrowhead ending below base
+    cx.strokeStyle = 'rgba(180, 80, 80, 0.6)';
+    cx.fillStyle = 'rgba(180, 80, 80, 0.6)';
+    cx.lineWidth = 1.5;
+    for(let i = 0; i < 6; i++){
+      const frac = (i + 0.5) / 6;
+      const ax = heelX + frac * B * scale;
+      // Height of uplift diagram at this x (on the sloped bottom line)
+      const shaftBottom = baseY + (upliftHeelH * (1 - frac) + upliftToeH * frac);
+      const shaftTop = baseY + 4; // arrow head ends just below base
+      
+      if(shaftBottom - shaftTop > 6){
+        // Shaft (vertical line)
+        cx.beginPath();
+        cx.moveTo(ax, shaftBottom);
+        cx.lineTo(ax, shaftTop);
+        cx.stroke();
+        // Arrow head (pointing up, ending below base)
+        cx.beginPath();
+        cx.moveTo(ax - 4, shaftTop + 5);
+        cx.lineTo(ax, shaftTop);
+        cx.lineTo(ax + 4, shaftTop + 5);
+        cx.closePath();
+        cx.fill();
+      }
+    }
+    
+    cx.fillStyle = '#a05050';
+    cx.font = '500 13px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText('Uplift (U)', (heelX + toeX) / 2, baseY + Math.max(upliftHeelH, upliftToeH) * 0.6 + 14);
+  }
+  
+  // === SELF WEIGHT INDICATOR (at exact CG of dam) ===
+  const cwX = heelX + (B - r.xW) * scale; // CG x-position from heel
+  // CG y from base for trapezoid: y_cg = H/3 × (B + 2T)/(B + T)
+  const cgYfromBase = H / 3 * (B + 2 * T) / (B + T);
+  const cwY = baseY - cgYfromBase * scale; // convert to canvas coordinates
+  
+  // Downward arrow starting from CG point
+  cx.strokeStyle = '#fff';
+  cx.fillStyle = '#fff';
+  cx.lineWidth = 2.5;
+  // Line from CG downward
+  cx.beginPath();
+  cx.moveTo(cwX, cwY);
+  cx.lineTo(cwX, cwY + 30);
+  cx.stroke();
+  // Arrow head
+  cx.beginPath();
+  cx.moveTo(cwX - 6, cwY + 25);
+  cx.lineTo(cwX, cwY + 35);
+  cx.lineTo(cwX + 6, cwY + 25);
+  cx.fill();
+  // CG dot
+  cx.beginPath();
+  cx.arc(cwX, cwY, 4, 0, Math.PI * 2);
+  cx.fill();
+  // W label above CG
+  cx.font = '700 19px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('W', cwX, cwY - 12);
+  
+  // === RESULTANT POSITION ON BASE ===
+  if(r.unstable){
+    // Don't draw resultant or stress diagram for unstable dam
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 17px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText('⚠ DAM UNSTABLE — Uplift exceeds self weight', (heelX+toeX)/2, baseY + 90);
+    return;
+  }
+  
+  // Clamp resultant position to visible range
+  const clampedXBar = Math.max(-B * 0.5, Math.min(B * 1.5, r.xBar));
+  const resultantX = Math.max(heelX - 30, Math.min(toeX + 30, toeX - clampedXBar * scale));
+  
+  // Middle third zone
+  const mt1 = toeX - (B / 3) * scale; // 1/3 from toe
+  const mt2 = toeX - (2 * B / 3) * scale; // 2/3 from toe
+  
+  // Middle third zone — bolder green, more visible
+  cx.fillStyle = 'rgba(46, 204, 113, 0.45)';
+  cx.fillRect(mt2, baseY - 5, mt1 - mt2, 10);
+  cx.strokeStyle = 'rgba(27, 150, 75, 0.9)';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(mt2, baseY - 5);
+  cx.lineTo(mt2, baseY + 5);
+  cx.moveTo(mt1, baseY - 5);
+  cx.lineTo(mt1, baseY + 5);
+  cx.stroke();
+  
+  cx.fillStyle = '#1b964b';
+  cx.font = '600 12px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Middle Third', (mt1 + mt2) / 2, baseY + 18);
+  
+  // Resultant marker — INSIDE the dam body, downward arrow
+  const resultantColor = r.insideMiddleThird ? '#1b964b' : '#c0392b';
+  const resultantTextColor = r.insideMiddleThird ? '#fff' : '#c0392b';
+  cx.strokeStyle = resultantColor;
+  cx.fillStyle = resultantColor;
+  cx.lineWidth = 2.5;
+  // Vertical shaft going down to baseY
+  const arrowTop = baseY - 50;
+  cx.beginPath();
+  cx.moveTo(resultantX, arrowTop);
+  cx.lineTo(resultantX, baseY - 2);
+  cx.stroke();
+  // Arrow head at bottom (pointing down to base)
+  cx.beginPath();
+  cx.moveTo(resultantX - 6, baseY - 10);
+  cx.lineTo(resultantX, baseY - 2);
+  cx.lineTo(resultantX + 6, baseY - 10);
+  cx.closePath();
+  cx.fill();
+  // R label above the arrow
+  cx.fillStyle = resultantTextColor;
+  cx.font = '700 17px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('R', resultantX, arrowTop - 16);
+  cx.font = '600 13px "Outfit"';
+  cx.fillText(`e = ${r.e.toFixed(2)} m`, resultantX, arrowTop - 4);
+  
+  // === STRESS DISTRIBUTION DIAGRAM ===
+  drawStressDiagram(p, r, heelX, toeX, baseY);
+}
+
+function drawStressDiagram(p, r, heelX, toeX, baseY){
+  const B_px = toeX - heelX;
+  const diagramTop = baseY + 130;
+  const maxStressH = 120;
+  
+  // Guard against extreme/invalid values
+  if(!isFinite(r.pToe) || !isFinite(r.pHeel) || r.sumV <= 0){
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 16px "Outfit"';
+    cx.textAlign = 'center';
+    cx.fillText('⚠ Dam is unstable — uplift exceeds self weight', (heelX+toeX)/2, diagramTop + 30);
+    return;
+  }
+  
+  // Scale stress values to pixels — clamp to avoid glitches
+  const maxStress = Math.max(Math.abs(r.pToe), Math.abs(r.pHeel), 10); // minimum 10 to avoid huge scale
+  const stressScale = maxStressH / maxStress;
+  
+  const pToePx = Math.max(Math.min(r.pToe * stressScale, maxStressH), -maxStressH);
+  const pHeelPx = Math.max(Math.min(r.pHeel * stressScale, maxStressH), -maxStressH);
+  
+  // Base reference line
+  cx.strokeStyle = '#4a4a5a';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  cx.moveTo(heelX, diagramTop);
+  cx.lineTo(toeX, diagramTop);
+  cx.stroke();
+  
+  // Labels
+  cx.fillStyle = '#2a3a5a';
+  cx.font = '600 14px "Outfit"';
+  cx.textAlign = 'center';
+  cx.fillText('Heel', heelX, diagramTop - 8);
+  cx.fillText('Toe', toeX, diagramTop - 8);
+  cx.fillText('Stress Distribution at Base', (heelX + toeX) / 2, diagramTop - 22);
+  
+  // Determine if there's a zero crossing
+  const hasTensionAtHeel = r.pHeel < 0 && r.pToe > 0;
+  const hasTensionAtToe = r.pToe < 0 && r.pHeel > 0;
+  const bothCompression = r.pHeel >= 0 && r.pToe >= 0;
+  const bothTension = r.pHeel < 0 && r.pToe < 0;
+  
+  if(bothCompression){
+    // Simple trapezoid downward
+    cx.beginPath();
+    cx.moveTo(heelX, diagramTop);
+    cx.lineTo(heelX, diagramTop + pHeelPx);
+    cx.lineTo(toeX, diagramTop + pToePx);
+    cx.lineTo(toeX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(46, 160, 80, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#2a8a50';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    cx.fillStyle = '#2a8a50';
+    cx.font = '500 13px "Outfit"';
+    cx.fillText('Compression', (heelX+toeX)/2, diagramTop + Math.max(pToePx, pHeelPx)/2 + 5);
+    
+  } else if(hasTensionAtHeel){
+    // Tension at heel, compression at toe
+    const zeroPt = Math.abs(r.pHeel) / (Math.abs(r.pHeel) + Math.abs(r.pToe));
+    const zeroX = heelX + zeroPt * B_px;
+    
+    // Tension zone (heel to zero) — upward
+    cx.beginPath();
+    cx.moveTo(heelX, diagramTop);
+    cx.lineTo(heelX, diagramTop + pHeelPx);
+    cx.lineTo(zeroX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(192, 57, 43, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#c0392b';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    // Compression zone (zero to toe) — downward
+    cx.beginPath();
+    cx.moveTo(zeroX, diagramTop);
+    cx.lineTo(toeX, diagramTop + pToePx);
+    cx.lineTo(toeX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(46, 160, 80, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#2a8a50';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    cx.fillStyle = '#4a4a5a';
+    cx.font = '500 12px "Outfit"';
+    cx.fillText('Zero', zeroX, diagramTop - 5);
+    
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 13px "Outfit"';
+    cx.fillText('TENSION', (heelX + zeroX) / 2, diagramTop + pHeelPx / 2);
+    
+    cx.fillStyle = '#2a8a50';
+    cx.fillText('Compression', (zeroX + toeX) / 2, diagramTop + pToePx / 2 + 5);
+    
+  } else if(hasTensionAtToe){
+    // Tension at toe, compression at heel (rare but possible)
+    const zeroPt = Math.abs(r.pHeel) / (Math.abs(r.pHeel) + Math.abs(r.pToe));
+    const zeroX = heelX + zeroPt * B_px;
+    
+    // Compression zone (heel to zero)
+    cx.beginPath();
+    cx.moveTo(heelX, diagramTop);
+    cx.lineTo(heelX, diagramTop + pHeelPx);
+    cx.lineTo(zeroX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(46, 160, 80, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#2a8a50';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    // Tension zone (zero to toe)
+    cx.beginPath();
+    cx.moveTo(zeroX, diagramTop);
+    cx.lineTo(toeX, diagramTop + pToePx);
+    cx.lineTo(toeX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(192, 57, 43, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#c0392b';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 13px "Outfit"';
+    cx.fillText('TENSION', (zeroX + toeX) / 2, diagramTop + pToePx / 2);
+    
+  } else if(bothTension){
+    // Both in tension — dam is completely unstable
+    cx.beginPath();
+    cx.moveTo(heelX, diagramTop);
+    cx.lineTo(heelX, diagramTop + pHeelPx);
+    cx.lineTo(toeX, diagramTop + pToePx);
+    cx.lineTo(toeX, diagramTop);
+    cx.closePath();
+    cx.fillStyle = 'rgba(192, 57, 43, 0.25)';
+    cx.fill();
+    cx.strokeStyle = '#c0392b';
+    cx.lineWidth = 2;
+    cx.stroke();
+    
+    cx.fillStyle = '#c0392b';
+    cx.font = '600 14px "Outfit"';
+    cx.fillText('FULL TENSION — DAM UNSAFE', (heelX+toeX)/2, diagramTop - 35);
+  }
+  
+  // Stress values at toe and heel
+  cx.font = '600 14px "Outfit"';
+  cx.textAlign = 'center';
+  
+  cx.fillStyle = r.pToe >= 0 ? '#2a8a50' : '#c0392b';
+  const toeValY = diagramTop + pToePx + (r.pToe >= 0 ? 18 : -8);
+  cx.fillText(`${r.pToe.toFixed(1)} kN/m²`, toeX, toeValY);
+  
+  cx.fillStyle = r.pHeel >= 0 ? '#2a8a50' : '#c0392b';
+  const heelValY = diagramTop + pHeelPx + (r.pHeel >= 0 ? 18 : -8);
+  cx.fillText(`${r.pHeel.toFixed(1)} kN/m²`, heelX, heelValY);
+  
+  // Dashed lines from base to stress diagram
+  cx.setLineDash([3, 3]);
+  cx.strokeStyle = '#aaa';
+  cx.lineWidth = 0.8;
+  cx.beginPath();
+  cx.moveTo(heelX, baseY);
+  cx.lineTo(heelX, diagramTop);
+  cx.moveTo(toeX, baseY);
+  cx.lineTo(toeX, diagramTop);
+  cx.stroke();
+  cx.setLineDash([]);
+}
+
+// Initial render
+update();
+</script>
+</body>
+</html>
