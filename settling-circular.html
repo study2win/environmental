@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Types of Settling — Circular Sedimentation Tank</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#eef1f5;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:14px 10px}
+.hdr{text-align:center;margin-bottom:10px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:26px;color:#1a2744}
+.hdr p{font-size:12px;color:#7a8599}
+.main{display:flex;gap:12px;justify-content:center;align-items:flex-start;max-width:1350px;width:100%}
+.left-col{width:220px;flex-shrink:0}
+.panel{background:#fff;border:1px solid #dde;border-radius:12px;padding:14px;margin-bottom:10px}
+.panel h2{font-family:'Instrument Serif',serif;font-size:15px;color:#1a2744;margin-bottom:10px;border-bottom:1px solid #eee;padding-bottom:5px}
+.btn-type{display:block;width:100%;padding:10px 12px;border:2px solid #ddd;border-radius:10px;background:#fff;font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;color:#1a2744;text-align:left;margin-bottom:6px;line-height:1.4}
+.btn-type:hover{background:#e8eef6;border-color:#4a7ab5}
+.btn-type.active{background:#2a5a8a;color:#fff;border-color:#2a5a8a}
+.btn-type .type-num{font-size:10px;font-weight:700;opacity:0.6}
+.canvas-wrap{background:#fff;border:1px solid #dde;border-radius:12px;padding:6px}
+canvas{display:block;width:920px;height:780px}
+.right-col{width:260px;flex-shrink:0}
+.info-box{background:#fff;border:1px solid #dde;border-radius:12px;padding:14px;height:780px;overflow-y:auto}
+.info-box h2{font-family:'Instrument Serif',serif;font-size:16px;color:#1a2744;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:5px}
+.info-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.info-desc{font-size:12px;color:#4a5568;line-height:1.7;margin-bottom:10px}
+.info-example{background:#f0f4f8;border-radius:8px;padding:8px 10px;font-size:11px;color:#2a5a8a;font-weight:500;margin-bottom:10px}
+.char-item{margin-bottom:4px;padding-left:8px;border-left:3px solid #ddd;font-size:11px;color:#555}
+.note-box{text-align:center;max-width:1350px;width:100%;margin-top:10px;padding:8px 16px;background:#fff;border:1px solid #dde;border-radius:10px}
+.note-box p{font-size:11px;color:#555;line-height:1.5;margin:0}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Types of Settling — Circular Sedimentation Tank</h1>
+  <p>Created by <strong>SAGAR DODEJA SIR (Ex. IES)</strong></p>
+</div>
+<div class="main">
+  <div class="left-col">
+    <div class="panel">
+      <h2>Select Type</h2>
+      <button class="btn-type active" id="btn-1" onclick="setType(1)">
+        <span class="type-num">TYPE I</span><br>Discrete Particle Settling
+      </button>
+      <button class="btn-type" id="btn-2" onclick="setType(2)">
+        <span class="type-num">TYPE II</span><br>Flocculent Settling
+      </button>
+      <button class="btn-type" id="btn-3" onclick="setType(3)">
+        <span class="type-num">TYPE III</span><br>Zone / Hindered Settling
+      </button>
+      <button class="btn-type" id="btn-4" onclick="setType(4)">
+        <span class="type-num">TYPE IV</span><br>Compression Settling
+      </button>
+    </div>
+    <div class="panel">
+      <h2>Controls</h2>
+      <button class="btn-type" onclick="resetSim()" style="text-align:center;border-color:#aaa">Reset Animation</button>
+    </div>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="c" width="920" height="780"></canvas>
+  </div>
+  <div class="right-col">
+    <div class="info-box">
+      <h2>About This Type</h2>
+      <div id="info-content"></div>
+    </div>
+  </div>
+</div>
+<div class="note-box">
+  <p><strong>Note:</strong> Cross-sectional view of a centre-feed, radial-flow circular sedimentation tank. Water enters via central pipe from below, rises into feed well, then flows radially outward. Refer class notes for derivations.</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 920, CH = 780;
+let tick = 0;
+let currentType = 1;
+
+// ========== TANK GEOMETRY ==========
+const centerX = CW / 2;
+
+// Tank walls
+const tankTop = 100;      // water surface Y
+const tankBot = 470;      // tank bottom at periphery
+const tankH = tankBot - tankTop;
+const tankLeft = 70;
+const tankRight = CW - 70;
+const tankRadius = (tankRight - tankLeft) / 2;
+
+// Sloped bottom — V-shape toward center
+const slopeDepth = 55;
+const centerBotY = tankBot + slopeDepth; // deepest point
+
+// Central pipe — rises from below the tank floor up through center
+const pipeHalfW = 10;
+const pipeBotY = centerBotY + 15;  // starts below tank floor
+const pipeTopY = tankTop - 5;      // top of pipe — just below water surface inside feed well
+
+// Feed well — walls ABOVE water surface (freeboard), bottom at ~25% depth
+const fwHalfW = 40;               // half-width of feed well
+const fwTopY = tankTop - 20;      // top of feed well ABOVE water surface (freeboard)
+const fwBotY = tankTop + tankH * 0.25; // bottom of feed well at 25% depth
+const fwWallThick = 5;
+
+// Peripheral weirs
+const weirH = 20;
+
+// Scraper
+let scraperAngle = 0;
+
+// Colors
+const COLORS = {
+  1:{main:'#e67e22',light:'rgba(230,126,34,0.35)'},
+  2:{main:'#2980b9',light:'rgba(41,128,185,0.35)'},
+  3:{main:'#27ae60',light:'rgba(39,174,96,0.35)'},
+  4:{main:'#c0392b',light:'rgba(192,57,43,0.35)'}
+};
+
+// State
+let particles = [];
+let blanketParticles = [];
+let compressionParticles = [];
+let waterDrops4 = [];
+
+// Flow animation dots — show water path
+let flowDots = [];
+function initFlowDots(){
+  flowDots = [];
+  // Dots rising in central pipe
+  for(let i=0;i<8;i++){
+    flowDots.push({
+      type:'pipe', x: centerX + (Math.random()-0.5)*pipeHalfW,
+      y: pipeBotY + Math.random()*(pipeTopY - pipeBotY),
+      speed: -0.8 - Math.random()*0.4 // upward
+    });
+  }
+  // Dots going down inside feed well (between pipe top and feed well bottom)
+  for(let i=0;i<6;i++){
+    flowDots.push({
+      type:'feedwell', x: centerX + (Math.random()-0.5)*(fwHalfW*1.5),
+      y: pipeTopY + Math.random()*(fwBotY - pipeTopY),
+      speed: 0.5 + Math.random()*0.3 // downward
+    });
+  }
+  // Dots flowing outward on both sides
+  for(let i=0;i<20;i++){
+    const side = i < 10 ? 1 : -1;
+    const dist = fwHalfW + 10 + Math.random()*(tankRadius - fwHalfW - 30);
+    flowDots.push({
+      type:'radial', side: side,
+      x: centerX + side * dist,
+      y: tankTop + 15 + Math.random()*(tankH - 40),
+      speed: 0.3 + Math.random()*0.3
+    });
+  }
+}
+initFlowDots();
+
+// ========== HELPERS ==========
+function getFloorY(x){
+  const d = Math.abs(x - centerX);
+  const frac = Math.min(1, d / tankRadius);
+  return centerBotY - slopeDepth * frac;
+}
+
+function getVh(distFromCenter){
+  const minD = fwHalfW + 5;
+  return 100 / Math.max(minD, distFromCenter);
+}
+
+// ========== INFO ==========
+const infoData = {
+  1:{title:'Type I — Discrete Settling (Parabolic Path)',color:'#e67e22',
+    desc:'Particles settle independently. Horizontal velocity <strong>decreases with radial distance</strong> (v ∝ 1/r) while settling velocity stays constant → <strong>parabolic path</strong>.',
+    chars:['Path is PARABOLIC (not straight)','v_h decreases outward: v_h = Q/(2πrh)','v_s constant (Stokes\' Law)','Steep near center, flattens outward','Bigger particles → steeper parabola','Hero particle: top of feed well → bottom at periphery'],
+    example:'Primary circular clarifier, grit-like particles'},
+  2:{title:'Type II — Flocculent Settling',color:'#2980b9',
+    desc:'Particles <strong>collide and aggregate</strong> as they flow outward. Settling velocity <strong>increases</strong> with floc growth → path curves even steeper than Type I.',
+    chars:['Parabolic + extra curvature','Particles grow by collision','Settling accelerates with size','More collisions near center','Steeper than Type I parabola','Requires column test for design'],
+    example:'Primary clarifier after coagulation'},
+  3:{title:'Type III — Zone / Hindered Settling',color:'#27ae60',
+    desc:'High concentration — particles flow outward from feed well as a <strong>dense mass</strong>. Clear interface forms. Settled sludge drifts toward center on sloped bottom.',
+    chars:['Dense mass flows radially outward','Clear interface descends','Particles jostle each other','Sludge drifts toward center sump','Interface descends uniformly','Common in secondary clarifiers'],
+    example:'Secondary clarifier (activated sludge)'},
+  4:{title:'Type IV — Compression Settling',color:'#c0392b',
+    desc:'Settled sludge <strong>compressed</strong> by weight above. Scraper arm pushes sludge toward center sump. Water squeezed out upward.',
+    chars:['Sludge compacts under weight','Water expelled upward','Sloped bottom → sludge to center','Scraper arm assists movement','Sludge withdrawn from center','Volume decreases with time'],
+    example:'Bottom of secondary clarifier, thickener'}
+};
+
+function setType(t){
+  currentType = t;
+  for(let i=1;i<=4;i++) document.getElementById('btn-'+i).classList.toggle('active',i===t);
+  resetSim(); updateInfo();
+}
+
+function resetSim(){
+  tick=0; particles=[]; blanketParticles=[]; compressionParticles=[]; waterDrops4=[];
+  window.type3Sludge=0; window.type3SpawnTimer=0; window.compH=0;
+  initParticles();
+}
+
+function updateInfo(){
+  const d=infoData[currentType];
+  let h=`<div class="info-title" style="color:${d.color}">${d.title}</div>`;
+  h+=`<div class="info-desc">${d.desc}</div>`;
+  h+=`<div class="info-example"><strong>Example:</strong> ${d.example}</div>`;
+  h+=`<div style="font-size:11px;color:#555;font-weight:600;margin-bottom:4px">Key Characteristics:</div>`;
+  d.chars.forEach(c=>{h+=`<div class="char-item" style="border-color:${d.color}">${c}</div>`;});
+  document.getElementById('info-content').innerHTML=h;
+}
+
+// ========== INIT PARTICLES ==========
+function initParticles(){
+  if(currentType===1) initType1();
+  if(currentType===2) initType2();
+  if(currentType===3) initType3();
+  if(currentType===4) initType4();
+}
+
+function initType1(){
+  const data = [
+    // Right side — various sizes
+    {side:1,entryFrac:0.0,vs:0.7,r:10},
+    {side:1,entryFrac:0.15,vs:0.55,r:8},
+    {side:1,entryFrac:0.3,vs:0.4,r:6.5},
+    {side:1,entryFrac:0.5,vs:0.3,r:5},
+    {side:1,entryFrac:0.7,vs:0.8,r:10},
+    // Left side
+    {side:-1,entryFrac:0.05,vs:0.65,r:9.5},
+    {side:-1,entryFrac:0.2,vs:0.45,r:7},
+    {side:-1,entryFrac:0.4,vs:0.35,r:5.5},
+    {side:-1,entryFrac:0.65,vs:0.75,r:9},
+    // Small — will escape
+    {side:1,entryFrac:0.05,vs:0.12,r:3},
+    {side:-1,entryFrac:0.08,vs:0.1,r:3},
+    // Hero
+    {side:1,entryFrac:0.0,vs:0,r:7,isHero:true},
+  ];
+  // Calculate hero vs
+  const heroVs = 0.42; // tuned for top→bottom at periphery
+  
+  data.forEach((d,i)=>{
+    const entryX = centerX + d.side*(fwHalfW+8);
+    const entryY = fwBotY + 5 + d.entryFrac*(tankBot - fwBotY - 40);
+    const vs = d.isHero ? heroVs : d.vs;
+    particles.push({
+      x:entryX,y:entryY,side:d.side,vs:vs,r:d.r,
+      isHero:d.isHero||false,settled:false,escaped:false,
+      path:[{x:entryX,y:entryY}],delay:i*30
+    });
+  });
+}
+
+function initType2(){
+  particles=[];
+  window.freeParticlesC=[];
+  const tracers=[
+    {side:1,entryFrac:0.0,delay:0},{side:1,entryFrac:0.2,delay:70},
+    {side:1,entryFrac:0.4,delay:140},{side:1,entryFrac:0.15,delay:210},
+    {side:1,entryFrac:0.5,delay:280},
+    {side:-1,entryFrac:0.05,delay:35},{side:-1,entryFrac:0.25,delay:105},
+    {side:-1,entryFrac:0.35,delay:175},{side:-1,entryFrac:0.1,delay:245},
+    {side:-1,entryFrac:0.45,delay:315},
+  ];
+  tracers.forEach((td)=>{
+    const entryX=centerX+td.side*(fwHalfW+8);
+    const entryY=fwBotY+5+td.entryFrac*(tankBot-fwBotY-50);
+    particles.push({
+      x:entryX,y:entryY,side:td.side,vs:0.12,r:3.5,isTracer:true,
+      settled:false,escaped:false,path:[{x:entryX,y:entryY}],
+      mergePoints:[],delay:td.delay
+    });
+  });
+  for(let i=0;i<120;i++){
+    const side=Math.random()>0.5?1:-1;
+    const dist=fwHalfW+20+Math.random()*(tankRadius-fwHalfW-40);
+    window.freeParticlesC.push({
+      x:centerX+side*dist, y:fwBotY+Math.random()*(tankBot-fwBotY-30),
+      r:2+Math.random()*2, alive:true, side:side
+    });
+  }
+}
+
+function initType3(){
+  blanketParticles=[];
+  window.type3Sludge=0;
+  window.type3SpawnTimer=0;
+}
+
+function initType4(){
+  compressionParticles=[];waterDrops4=[];
+  window.compH=tankH*0.22;
+  for(let i=0;i<1200;i++){
+    const x=tankLeft+15+Math.random()*(tankRight-tankLeft-30);
+    compressionParticles.push({
+      x:x, yFrac:Math.random(), r:1.5+Math.random()*2,
+      wobble:Math.random()*Math.PI*2
+    });
+  }
+}
+
+// ========== UPDATE ==========
+function updateAll(){
+  if(currentType===1) updateType1();
+  if(currentType===2) updateType2();
+  if(currentType===3) updateType3();
+  if(currentType===4) updateType4();
+  scraperAngle+=0.003;
+  updateFlowDots();
+}
+
+function updateFlowDots(){
+  flowDots.forEach(fd=>{
+    if(fd.type==='pipe'){
+      fd.y+=fd.speed;
+      if(fd.y<pipeTopY){ fd.y=pipeBotY-10; }
+    }
+    if(fd.type==='feedwell'){
+      fd.y+=fd.speed;
+      if(fd.y>fwBotY){ fd.y=pipeTopY+5; fd.x=centerX+(Math.random()-0.5)*(fwHalfW*1.5); }
+    }
+    if(fd.type==='radial'){
+      const dist=Math.abs(fd.x-centerX);
+      const vh=getVh(dist)*0.5;
+      fd.x+=fd.side*vh;
+      if(fd.side===1 && fd.x>tankRight-15){ fd.x=centerX+fwHalfW+12; fd.y=fwBotY+10+Math.random()*(tankH*0.6); }
+      if(fd.side===-1 && fd.x<tankLeft+15){ fd.x=centerX-fwHalfW-12; fd.y=fwBotY+10+Math.random()*(tankH*0.6); }
+    }
+  });
+}
+
+function updateType1(){
+  particles.forEach(p=>{
+    if(p.settled||p.escaped||tick<p.delay) return;
+    const d=Math.abs(p.x-centerX);
+    p.x+=p.side*getVh(d);
+    p.y+=p.vs;
+    if(tick%3===0) p.path.push({x:p.x,y:p.y});
+    const fy=getFloorY(p.x);
+    if(p.y>=fy-p.r-3){p.y=fy-p.r-3;p.settled=true;p.path.push({x:p.x,y:p.y});}
+    if(p.x>=tankRight-10||p.x<=tankLeft+10){p.escaped=true;p.path.push({x:p.x,y:p.y});}
+  });
+}
+
+function updateType2(){
+  particles.forEach(p=>{
+    if(p.settled||p.escaped||tick<p.delay) return;
+    const d=Math.abs(p.x-centerX);
+    p.x+=p.side*getVh(d);
+    p.y+=p.vs;
+    if(p.isTracer&&window.freeParticlesC){
+      window.freeParticlesC.forEach(fp=>{
+        if(!fp.alive) return;
+        const dx=fp.x-p.x,dy=fp.y-p.y;
+        if(Math.sqrt(dx*dx+dy*dy)<p.r+fp.r+4){
+          fp.alive=false;
+          p.r=Math.min(16,Math.sqrt(p.r*p.r+fp.r*fp.r));
+          p.vs=Math.min(2.0,p.vs+0.1);
+          p.mergePoints.push({x:p.x,y:p.y,newR:p.r,tick:tick});
+          p.path.push({x:p.x,y:p.y,merge:true});
+        }
+      });
+    }
+    if(tick%3===0) p.path.push({x:p.x,y:p.y});
+    const fy=getFloorY(p.x);
+    if(p.y>=fy-p.r-3){p.y=fy-p.r-3;p.settled=true;p.path.push({x:p.x,y:p.y});}
+    if(p.x>=tankRight-10||p.x<=tankLeft+10){p.escaped=true;p.path.push({x:p.x,y:p.y});}
+  });
+  if(window.freeParticlesC){
+    window.freeParticlesC.forEach(fp=>{
+      if(!fp.alive) return;
+      const vh=getVh(Math.abs(fp.x-centerX))*0.2;
+      fp.x+=fp.side*vh;fp.y+=0.04;
+      if(fp.x>tankRight-15||fp.x<tankLeft+15){
+        fp.x=centerX+fp.side*(fwHalfW+20);fp.y=fwBotY+Math.random()*(tankH*0.4);
+      }
+    });
+  }
+}
+
+function updateType3(){
+  window.type3SpawnTimer=(window.type3SpawnTimer||0)+1;
+  if(window.type3SpawnTimer%4===0){
+    for(let s=-1;s<=1;s+=2){
+      for(let i=0;i<6;i++){
+        const entryX=centerX+s*(fwHalfW+3+Math.random()*6);
+        const py=fwBotY+5+Math.random()*(tankBot-fwBotY-40);
+        blanketParticles.push({
+          x:entryX,y:py,side:s,vs:0.08+Math.random()*0.04,
+          r:2+Math.random()*2.5,settled:false,escaped:false,
+          wobblePhase:Math.random()*Math.PI*2
+        });
+      }
+    }
+  }
+  const maxSludge = tankH * 0.30;
+  blanketParticles.forEach(bp=>{
+    if(bp.escaped) return;
+    if(bp.settled){
+      // Drift toward center on sloped bottom
+      const distC=bp.x-centerX;
+      if(Math.abs(distC)>15) bp.x-=distC*0.001;
+      return;
+    }
+    const d=Math.abs(bp.x-centerX);
+    const vh=getVh(d)*0.6;
+    bp.x+=bp.side*vh+Math.sin(tick*0.04+bp.wobblePhase)*0.2;
+    bp.y+=bp.vs+Math.sin(tick*0.06+bp.wobblePhase+1)*0.04;
+    const fy=getFloorY(bp.x);
+    const sLevel=fy-(window.type3Sludge||0);
+    if(bp.y>=sLevel){bp.y=sLevel;bp.settled=true;}
+    if(bp.x>tankRight-10||bp.x<tankLeft+10) bp.escaped=true;
+  });
+  const settled=blanketParticles.filter(bp=>bp.settled).length;
+  window.type3Sludge=Math.min(maxSludge,settled*0.02);
+  // Cap sludge: remove oldest settled particles if too many
+  if(window.type3Sludge>=maxSludge){
+    const settledPs=blanketParticles.filter(bp=>bp.settled);
+    if(settledPs.length>400){
+      let removed=0;
+      blanketParticles=blanketParticles.filter(bp=>{
+        if(bp.settled && removed<10){removed++;return false;}
+        return !bp.escaped;
+      });
+    }
+  }
+  if(blanketParticles.length>3500) blanketParticles=blanketParticles.filter(bp=>!bp.escaped);
+}
+
+function updateType4(){
+  const minH=tankH*0.10;
+  if(window.compH>minH) window.compH-=0.015;
+  if(window.compH>minH+2&&tick%30===0){
+    for(let s=-1;s<=1;s+=2){
+      const x=centerX+s*(25+Math.random()*(tankRadius-50));
+      const fy=getFloorY(x);
+      waterDrops4.push({x:x,y:fy-window.compH,vy:-0.12-Math.random()*0.12,r:2+Math.random()*1.5,life:200});
+    }
+  }
+  waterDrops4.forEach(d=>{d.y+=d.vy;d.x+=(Math.random()-0.5)*0.1;d.life--;});
+  waterDrops4=waterDrops4.filter(d=>d.life>0&&d.y>tankTop);
+}
+
+// ========== DRAWING ==========
+function drawTank(){
+  // Water body (follows sloped bottom)
+  cx.fillStyle='rgba(180,215,245,0.18)';
+  cx.beginPath();
+  cx.moveTo(tankLeft,tankTop);
+  cx.lineTo(tankRight,tankTop);
+  cx.lineTo(tankRight,tankBot);
+  cx.lineTo(centerX,centerBotY);
+  cx.lineTo(tankLeft,tankBot);
+  cx.closePath();
+  cx.fill();
+  
+  // (flow dots drawn after pipe and feed well)
+  
+  // Sloped bottom
+  cx.strokeStyle='#3a4a5a';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(tankLeft,tankBot);cx.lineTo(centerX,centerBotY);cx.lineTo(tankRight,tankBot);cx.stroke();
+  
+  // Tank walls
+  cx.beginPath();cx.moveTo(tankLeft,tankTop-15);cx.lineTo(tankLeft,tankBot);cx.stroke();
+  cx.beginPath();cx.moveTo(tankRight,tankTop-15);cx.lineTo(tankRight,tankBot);cx.stroke();
+  
+  // Water surface (gap for feed well)
+  cx.strokeStyle='rgba(70,140,210,0.5)';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(tankLeft,tankTop);cx.lineTo(centerX-fwHalfW-fwWallThick,tankTop);cx.stroke();
+  cx.beginPath();cx.moveTo(centerX+fwHalfW+fwWallThick,tankTop);cx.lineTo(tankRight,tankTop);cx.stroke();
+  
+  // Central pipe — rises from below tank floor
+  cx.fillStyle='#6a7a8a';
+  cx.fillRect(centerX-pipeHalfW, pipeBotY, pipeHalfW*2, pipeTopY-pipeBotY);
+  cx.strokeStyle='#4a5a6a';cx.lineWidth=2;
+  cx.strokeRect(centerX-pipeHalfW, pipeBotY, pipeHalfW*2, pipeTopY-pipeBotY);
+  
+  // Feed well walls — extend ABOVE water surface
+  cx.fillStyle='#5a6a7a';
+  // Left wall
+  cx.fillRect(centerX-fwHalfW-fwWallThick, fwTopY, fwWallThick, fwBotY-fwTopY);
+  // Right wall
+  cx.fillRect(centerX+fwHalfW, fwTopY, fwWallThick, fwBotY-fwTopY);
+  cx.strokeStyle='#4a5a6a';cx.lineWidth=1.5;
+  cx.strokeRect(centerX-fwHalfW-fwWallThick, fwTopY, fwWallThick, fwBotY-fwTopY);
+  cx.strokeRect(centerX+fwHalfW, fwTopY, fwWallThick, fwBotY-fwTopY);
+  
+  // Freeboard indicator
+  cx.fillStyle='rgba(70,140,210,0.15)';
+  cx.fillRect(centerX-fwHalfW, tankTop, fwHalfW*2, fwBotY-tankTop);
+  // Water inside feed well (below water surface level)
+  cx.fillStyle='rgba(150,200,240,0.25)';
+  cx.fillRect(centerX-fwHalfW, tankTop, fwHalfW*2, fwBotY-tankTop);
+  
+  // Flow dots animation — drawn ON TOP of pipe and feed well
+  drawFlowDots();
+  
+  // Peripheral weirs
+  cx.fillStyle='#5a6a7a';
+  cx.fillRect(tankLeft-4, tankTop-15, 8, weirH);
+  cx.fillRect(tankRight-4, tankTop-15, 8, weirH);
+  
+  // Labels
+  cx.fillStyle='#3a4a5a';cx.font='600 14px "Outfit"';cx.textAlign='center';
+  // (Central Pipe label removed)
+  
+  cx.font='500 11px "Outfit"';
+  cx.save();cx.translate(centerX-fwHalfW-fwWallThick-10,(fwTopY+fwBotY)/2);cx.rotate(-Math.PI/2);
+  cx.fillText('Feed Well',0,0);cx.restore();
+  
+  // Freeboard label
+  cx.fillStyle='#666';cx.font='500 10px "Outfit"';cx.textAlign='left';
+  cx.fillText('Freeboard',centerX+fwHalfW+10,fwTopY+8);
+  
+  cx.fillStyle='#3a4a5a';cx.font='600 12px "Outfit"';cx.textAlign='center';
+  cx.fillText('Weir',tankLeft,tankTop-20);
+  cx.fillText('Weir',tankRight,tankTop-20);
+  
+  // Effluent arrows
+  cx.fillStyle='#3a8ad0';cx.font='500 12px "Outfit"';
+  cx.textAlign='right';cx.fillText('← Effluent',tankLeft-10,tankTop+5);
+  cx.textAlign='left';cx.fillText('Effluent →',tankRight+10,tankTop+5);
+  
+  // Sump label
+  cx.fillStyle='#5a5050';cx.font='500 11px "Outfit"';cx.textAlign='center';
+  // (sludge sump removed — central pipe occupies this space)
+  
+  // Title
+  cx.fillStyle='#1a2744';cx.font='700 17px "Outfit"';
+  cx.fillText('Circular Sedimentation Tank — Cross Section',centerX,30);
+  
+  // Watermark
+  cx.fillStyle='rgba(26,39,68,0.06)';cx.font='500 10px "Outfit"';
+  cx.fillText('SAGAR DODEJA SIR (Ex. IES)',centerX,centerBotY+35);
+}
+
+function drawFlowDots(){
+  flowDots.forEach(fd=>{
+    let alpha=0.4;
+    cx.fillStyle=`rgba(50,140,220,${alpha})`;
+    cx.beginPath();cx.arc(fd.x,fd.y,2.5,0,Math.PI*2);cx.fill();
+  });
+  
+  // Upward animated water drops inside central pipe
+  const pipeLen = pipeTopY - pipeBotY;
+  for(let i = 0; i < 5; i++){
+    // Simple upward cycling: each drop starts at bottom and rises to top
+    const phase = ((tick * 0.6 + i * (pipeLen / 5)) % pipeLen);
+    const dropY = pipeTopY - phase; // rises upward
+    if(dropY > pipeBotY + 8 && dropY < pipeTopY - 5){
+      cx.fillStyle = 'rgba(180,240,255,0.9)';
+      // Bigger circle
+      cx.beginPath();
+      cx.arc(centerX, dropY, 5, 0, Math.PI * 2);
+      cx.fill();
+      // Teardrop point upward
+      cx.beginPath();
+      cx.moveTo(centerX - 3, dropY);
+      cx.quadraticCurveTo(centerX, dropY - 7, centerX + 3, dropY);
+      cx.fill();
+    }
+  }
+  
+  // Upward arrow heads inside pipe
+  cx.fillStyle = 'rgba(180,240,255,0.9)';
+  for(let i = 0; i < 2; i++){
+    const ay = pipeBotY + 40 + i * (pipeLen * 0.4);
+    cx.beginPath();
+    cx.moveTo(centerX - 6, ay + 8);
+    cx.lineTo(centerX + 6, ay + 8);
+    cx.lineTo(centerX, ay);
+    cx.fill();
+  }
+  
+  // Downward arrows inside feed well
+  cx.fillStyle='rgba(50,140,220,0.25)';
+  for(let i=0;i<2;i++){
+    for(let s=-1;s<=1;s+=2){
+      const ax=centerX+s*18;
+      const ay=pipeTopY+15+i*30;
+      const animOff=((tick*0.4+i*35)%50);
+      const ay2=ay+animOff;
+      if(ay2>pipeTopY+5&&ay2<fwBotY-5){
+        cx.beginPath();cx.moveTo(ax-4,ay2-6);cx.lineTo(ax+4,ay2-6);cx.lineTo(ax,ay2);cx.fill();
+      }
+    }
+  }
+  
+  // Outward arrows from feed well bottom
+  cx.fillStyle='rgba(50,140,220,0.2)';
+  for(let s=-1;s<=1;s+=2){
+    for(let i=0;i<3;i++){
+      const dist=fwHalfW+20+i*60;
+      const ax=centerX+s*dist;
+      const ay=fwBotY+15;
+      // Horizontal arrow
+      cx.beginPath();
+      cx.moveTo(ax,ay);cx.lineTo(ax+s*8,ay-3);cx.lineTo(ax+s*8,ay+3);cx.fill();
+    }
+  }
+}
+
+// ========== DRAW TYPES ==========
+function drawType1(){
+  const col=COLORS[1];
+  particles.forEach(p=>{
+    if(tick<p.delay) return;
+    // Path
+    if(p.path.length>1){
+      if(p.isHero){cx.strokeStyle='rgba(218,165,32,0.5)';cx.lineWidth=4;}
+      else if(p.escaped){cx.strokeStyle='rgba(200,50,50,0.25)';cx.setLineDash([4,3]);cx.lineWidth=2.5;}
+      else{cx.strokeStyle=col.light;cx.lineWidth=2.5;}
+      cx.beginPath();p.path.forEach((pt,i)=>{if(i===0)cx.moveTo(pt.x,pt.y);else cx.lineTo(pt.x,pt.y);});cx.stroke();cx.setLineDash([]);
+    }
+    // Particle
+    if(p.escaped){
+      const lp=p.path[p.path.length-1];
+      cx.fillStyle='rgba(200,50,50,0.3)';cx.beginPath();cx.arc(lp.x,lp.y,p.r,0,Math.PI*2);cx.fill();
+      cx.strokeStyle='#c0392b';cx.lineWidth=2;cx.beginPath();cx.moveTo(lp.x-5,lp.y-5);cx.lineTo(lp.x+5,lp.y+5);cx.moveTo(lp.x+5,lp.y-5);cx.lineTo(lp.x-5,lp.y+5);cx.stroke();
+    } else if(p.settled&&p.isHero){
+      cx.shadowColor='rgba(218,165,32,0.6)';cx.shadowBlur=12;cx.fillStyle='#DAA520';
+      cx.beginPath();cx.arc(p.x,p.y,p.r+2,0,Math.PI*2);cx.fill();cx.shadowBlur=0;
+      cx.strokeStyle='#B8860B';cx.lineWidth=2;cx.stroke();
+      cx.fillStyle='#B8860B';cx.font='800 16px "Outfit"';cx.textAlign='center';
+      cx.fillText('OUR HERO!',p.x,p.y-20);
+      cx.font='500 11px "Outfit"';cx.fillStyle='#8B6914';cx.fillText('(just barely settled)',p.x,p.y-7);
+    } else if(p.settled){
+      cx.fillStyle='rgba(230,126,34,0.5)';cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fill();
+      cx.fillStyle='#27ae60';cx.font='700 10px "Outfit"';cx.textAlign='center';cx.fillText('✓',p.x,p.y+p.r+12);
+    } else if(p.isHero){
+      cx.shadowColor='rgba(218,165,32,0.4)';cx.shadowBlur=8;cx.fillStyle='#DAA520';
+      cx.beginPath();cx.arc(p.x,p.y,p.r+1,0,Math.PI*2);cx.fill();cx.shadowBlur=0;
+      cx.strokeStyle='#B8860B';cx.lineWidth=2;cx.stroke();
+    } else {
+      cx.fillStyle=col.main;cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fill();
+      cx.strokeStyle='rgba(0,0,0,0.2)';cx.lineWidth=1;cx.stroke();
+    }
+  });
+  drawTypeLegend('Type I — Discrete Settling (Parabolic Path)',col.main,'v_h decreases outward (v ∝ 1/r), v_s constant → parabolic trajectory');
+}
+
+function drawType2(){
+  const col=COLORS[2];
+  if(window.freeParticlesC){
+    window.freeParticlesC.forEach(fp=>{
+      if(!fp.alive) return;
+      cx.fillStyle='rgba(41,128,185,0.25)';cx.beginPath();cx.arc(fp.x,fp.y,fp.r,0,Math.PI*2);cx.fill();
+    });
+  }
+  particles.forEach(p=>{
+    if(tick<p.delay||!p.isTracer) return;
+    if(p.path.length>1){
+      cx.strokeStyle='rgba(41,128,185,0.4)';cx.lineWidth=3;cx.beginPath();
+      p.path.forEach((pt,i)=>{if(i===0)cx.moveTo(pt.x,pt.y);else cx.lineTo(pt.x,pt.y);});cx.stroke();
+    }
+    if(p.mergePoints){
+      p.mergePoints.forEach(mp=>{
+        const age=tick-mp.tick;
+        if(age<60){
+          const rr=mp.newR+age*0.3;const a=Math.max(0,0.5-age*0.008);
+          cx.strokeStyle=`rgba(255,200,50,${a})`;cx.lineWidth=2;cx.beginPath();cx.arc(mp.x,mp.y,rr,0,Math.PI*2);cx.stroke();
+        }
+        cx.fillStyle='rgba(255,180,30,0.5)';cx.beginPath();cx.arc(mp.x,mp.y,3,0,Math.PI*2);cx.fill();
+      });
+    }
+    if(!p.escaped){
+      cx.fillStyle=p.settled?'rgba(41,128,185,0.5)':col.main;
+      cx.beginPath();cx.arc(p.x,p.y,p.r,0,Math.PI*2);cx.fill();
+      cx.strokeStyle='rgba(0,0,0,0.2)';cx.lineWidth=1.5;cx.stroke();
+      if(p.settled){cx.fillStyle='#27ae60';cx.font='700 10px "Outfit"';cx.textAlign='center';cx.fillText('✓',p.x,p.y+p.r+12);}
+    }
+  });
+  drawTypeLegend('Type II — Flocculent Settling',col.main,'Particles collide & merge → path curves steeper than Type I');
+}
+
+function drawType3(){
+  const col=COLORS[3];
+  const sH=window.type3Sludge||0;
+  // Sludge
+  if(sH>2){
+    cx.fillStyle='rgba(39,140,70,0.25)';cx.beginPath();cx.moveTo(tankLeft+2,getFloorY(tankLeft+2));
+    for(let x=tankLeft+2;x<=tankRight-2;x+=5) cx.lineTo(x,getFloorY(x)-sH);
+    cx.lineTo(tankRight-2,getFloorY(tankRight-2));cx.lineTo(centerX,centerBotY);cx.lineTo(tankLeft+2,getFloorY(tankLeft+2));cx.closePath();cx.fill();
+    if(sH>15){cx.fillStyle='rgba(20,100,40,0.5)';cx.font='600 13px "Outfit"';cx.textAlign='center';cx.fillText('Accumulated Sludge',centerX,centerBotY-sH*0.3);}
+  }
+  // Particles
+  blanketParticles.forEach(bp=>{
+    if(bp.escaped) return;
+    cx.fillStyle=bp.settled?'rgba(39,140,70,0.3)':`rgba(39,174,96,${0.4+Math.random()*0.2})`;
+    cx.beginPath();cx.arc(bp.x,bp.y,bp.r,0,Math.PI*2);cx.fill();
+  });
+  // Interface
+  const active=blanketParticles.filter(bp=>!bp.settled&&!bp.escaped&&Math.abs(bp.x-centerX)>fwHalfW+30);
+  if(active.length>30){
+    const sorted=active.map(p=>p.y).sort((a,b)=>a-b);
+    const topY=sorted[Math.floor(sorted.length*0.05)];
+    if(topY>tankTop+40){
+      cx.fillStyle='rgba(70,140,210,0.4)';cx.font='600 15px "Outfit"';cx.textAlign='center';
+      cx.fillText('Clear Water',centerX,(tankTop+topY)/2);
+      cx.strokeStyle='rgba(39,174,96,0.5)';cx.lineWidth=2;cx.setLineDash([6,4]);
+      cx.beginPath();cx.moveTo(tankLeft+20,topY);cx.lineTo(centerX-fwHalfW-10,topY);cx.stroke();
+      cx.beginPath();cx.moveTo(centerX+fwHalfW+10,topY);cx.lineTo(tankRight-20,topY);cx.stroke();
+      cx.setLineDash([]);cx.fillStyle=col.main;cx.font='600 13px "Outfit"';cx.fillText('▼ Interface ▼',centerX-tankRadius*0.5,topY-8);cx.fillText('▼ Interface ▼',centerX+tankRadius*0.5,topY-8);
+    }
+  }
+  drawTypeLegend('Type III — Zone / Hindered Settling',col.main,'Dense mass from feed well • Blanket settles • Sludge drifts to center');
+}
+
+function drawType4(){
+  const col=COLORS[4];const cH=window.compH||0;
+  // Sludge zone
+  cx.beginPath();cx.moveTo(tankLeft+2,getFloorY(tankLeft+2));
+  for(let x=tankLeft+2;x<=tankRight-2;x+=5) cx.lineTo(x,getFloorY(x)-cH);
+  cx.lineTo(tankRight-2,getFloorY(tankRight-2));cx.lineTo(centerX,centerBotY);cx.lineTo(tankLeft+2,getFloorY(tankLeft+2));cx.closePath();
+  const sG=cx.createLinearGradient(0,centerBotY-cH,0,centerBotY);sG.addColorStop(0,'rgba(192,57,43,0.15)');sG.addColorStop(1,'rgba(192,57,43,0.4)');cx.fillStyle=sG;cx.fill();
+  // Interface
+  cx.strokeStyle=col.main;cx.lineWidth=2;cx.beginPath();
+  for(let x=tankLeft+5;x<=tankRight-5;x+=5){if(x===tankLeft+5)cx.moveTo(x,getFloorY(x)-cH);else cx.lineTo(x,getFloorY(x)-cH);}cx.stroke();
+  // Particles
+  compressionParticles.forEach(cp=>{
+    const fy=getFloorY(cp.x);const sTop=fy-cH;const py=sTop+cp.yFrac*cH;
+    if(py>sTop&&py<fy){const a=0.25+cp.yFrac*0.4;cx.fillStyle=`rgba(192,57,43,${a})`;cx.beginPath();cx.arc(cp.x+Math.sin(tick*0.01+cp.wobble)*0.5,py,cp.r*(1-cp.yFrac*0.3),0,Math.PI*2);cx.fill();}
+  });
+  // Water drops
+  waterDrops4.forEach(d=>{
+    const a=Math.min(0.6,d.life/200);cx.fillStyle=`rgba(70,150,220,${a})`;cx.beginPath();cx.arc(d.x,d.y+2,d.r,0,Math.PI*2);cx.fill();
+    cx.beginPath();cx.moveTo(d.x-d.r*0.6,d.y+1);cx.quadraticCurveTo(d.x,d.y-d.r*2,d.x+d.r*0.6,d.y+1);cx.fill();
+  });
+  // Upward arrows
+  cx.fillStyle='rgba(70,140,210,0.3)';
+  for(let i=0;i<6;i++){const ax=tankLeft+70+i*((tankRight-tankLeft-140)/5);const fy=getFloorY(ax);const ay=fy-cH-15;
+    cx.beginPath();cx.moveTo(ax-5,ay+8);cx.lineTo(ax+5,ay+8);cx.lineTo(ax,ay);cx.fill();
+    cx.strokeStyle='rgba(70,140,210,0.2)';cx.lineWidth=1.5;cx.beginPath();cx.moveTo(ax,ay+8);cx.lineTo(ax,ay+22);cx.stroke();
+  }
+  cx.fillStyle='rgba(70,140,210,0.4)';cx.font='600 13px "Outfit"';cx.textAlign='center';
+  const topSludge=getFloorY(centerX)-cH;cx.fillText('↑ Water squeezed out ↑',centerX,topSludge-30);
+  // Scraper
+  cx.strokeStyle='#555';cx.lineWidth=3;cx.beginPath();cx.moveTo(centerX,centerBotY-5);
+  const scrEnd=centerX+Math.cos(scraperAngle)*(tankRadius-20);cx.lineTo(scrEnd,getFloorY(scrEnd)-5);cx.stroke();
+  cx.fillStyle='#555';cx.font='500 11px "Outfit"';cx.textAlign='center';cx.fillText('Scraper Arm',centerX,topSludge-12);
+  // Labels
+  cx.fillStyle='rgba(192,57,43,0.6)';cx.font='700 14px "Outfit"';cx.fillText('Compressing Sludge',centerX,centerBotY-cH*0.35);
+  cx.fillStyle='rgba(70,140,210,0.4)';cx.font='600 14px "Outfit"';cx.fillText('Clear Water',centerX,(tankTop+topSludge-30)/2);
+  drawTypeLegend('Type IV — Compression Settling',col.main,'Sludge compacts • Scraper to center sump • Water expelled upward');
+}
+
+function drawTypeLegend(title,color,subtitle){
+  const ly=centerBotY+60;cx.fillStyle=color;cx.font='700 17px "Outfit"';cx.textAlign='center';cx.fillText(title,centerX,ly);
+  cx.fillStyle='#666';cx.font='500 13px "Outfit"';cx.fillText(subtitle,centerX,ly+22);
+}
+
+// ========== RENDER ==========
+function render(){
+  tick++;cx.clearRect(0,0,CW,CH);
+  try{
+    drawTank();
+    if(currentType===1) drawType1();
+    else if(currentType===2) drawType2();
+    else if(currentType===3) drawType3();
+    else if(currentType===4) drawType4();
+    updateAll();
+  }catch(e){cx.fillStyle='#c00';cx.font='14px "Outfit"';cx.textAlign='left';cx.fillText('Error: '+e.message,20,20);console.error(e);}
+  requestAnimationFrame(render);
+}
+
+initParticles();updateInfo();render();
+</script>
+</body>
+</html>
