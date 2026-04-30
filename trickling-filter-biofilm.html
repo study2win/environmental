@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trickling Filter — Biofilm Mechanism</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Outfit:wght@300;400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111820;font-family:'Outfit',sans-serif;display:flex;flex-direction:column;align-items:center;padding:14px 10px}
+.hdr{text-align:center;margin-bottom:10px}
+.hdr h1{font-family:'Instrument Serif',serif;font-size:28px;color:#c8d8e8}
+.hdr p{font-size:12px;color:#7a8fa5}
+.canvas-wrap{background:#0d1520;border:1px solid #1a2a3a;border-radius:14px;padding:8px;position:relative}
+canvas{display:block;border-radius:10px}
+.controls{margin-top:12px;display:flex;gap:10px;justify-content:center}
+.btn{padding:14px 35px;border:2px solid #3a6a9a;border-radius:12px;background:transparent;font-family:'Outfit',sans-serif;font-size:16px;font-weight:700;cursor:pointer;color:#8abae0;transition:all 0.2s}
+.btn:hover{background:#1a3a5a;color:#c0daf0}
+.btn-next{border-color:#4a9a6a;color:#8ae0aa}
+.btn-next:hover{background:#1a3a2a}
+.btn-replay{border-color:#9a6a4a;color:#e0aa8a}
+.btn-replay:hover{background:#3a2a1a}
+.note-box{text-align:center;max-width:960px;width:100%;margin-top:10px;padding:8px 16px;background:#0d1520;border:1px solid #1a2a3a;border-radius:10px}
+.note-box p{font-size:11px;color:#5a7a9a;line-height:1.5;margin:0}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Trickling Filter — Biofilm Mechanism</h1>
+  <p>Created by <strong>SAGAR DODEJA SIR (Ex. IES)</strong></p>
+</div>
+<div class="canvas-wrap">
+  <canvas id="c" width="920" height="640"></canvas>
+</div>
+<div class="controls">
+  <button class="btn btn-next" id="btn-next" onclick="nextStep()" style="display:none">Next Step →</button>
+  <button class="btn btn-replay" id="btn-replay" onclick="replaySim()" style="display:none">🔄 Replay</button>
+</div>
+<div class="note-box">
+  <p><strong>Note:</strong> This animation shows the biofilm development cycle on a single gravel piece inside a trickling filter. The process repeats continuously. Refer class notes for detailed theory.</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const cx = canvas.getContext('2d');
+const CW = 920, CH = 640;
+let tick = 0;
+
+/*
+  STEPS:
+  0  = overview (click gravel)
+  1  = zooming
+  2  = clean gravel intro
+  3  = aerobic biofilm forming
+  4  = aerobic zone zoomed — happy organisms
+  5  = transition zone
+  6  = anaerobic zone — 😤
+  7  = endogenous zone — 😡
+  8  = sword fight scene ⚔️
+  9  = sloughing — cracks, vibrations, break, fall
+  10 = done — clean gravel
+*/
+
+let step = 0;
+let stepTimer = 0;
+let biofilmThickness = 0;
+let sloughPhase = 0; // 0=cracks, 1=vibrate, 2=gas, 3=break, 4=fall
+let sloughTimer = 0;
+let cracks = [];
+let sloughedPieces = [];
+let clickEnabled = false;
+let shakeAmount = 0;
+let fighters = [];
+
+const GX = CW/2 - 40;
+const GY = CH/2 - 40;
+const GR = 100;
+const MAX_BIO = 85;
+
+function showNext(){ document.getElementById('btn-next').style.display='inline-block'; }
+function hideNext(){ document.getElementById('btn-next').style.display='none'; }
+
+function nextStep(){
+  step++; stepTimer=0; hideNext();
+  if(step===3) biofilmThickness=0;
+  if(step===7) biofilmThickness=1;
+  if(step===8) initFighters();
+  if(step===9){ sloughPhase=0; sloughTimer=0; cracks=[]; sloughedPieces=[]; shakeAmount=0; initCracks(); }
+}
+
+function replaySim(){
+  step=0;stepTimer=0;biofilmThickness=0;sloughPhase=0;sloughTimer=0;
+  cracks=[];sloughedPieces=[];fighters=[];clickEnabled=false;shakeAmount=0;
+  document.getElementById('btn-replay').style.display='none';
+  hideNext();
+}
+
+function initFighters(){
+  fighters=[
+    {x:CW/2-120,y:CH/2-30,emoji:'😡',hp:3,target:1,atkT:0,dead:false},
+    {x:CW/2+120,y:CH/2-30,emoji:'😡',hp:3,target:0,atkT:0,dead:false},
+    {x:CW/2-80,y:CH/2+60,emoji:'😡',hp:2,target:3,atkT:0,dead:false},
+    {x:CW/2+80,y:CH/2+60,emoji:'😡',hp:2,target:2,atkT:0,dead:false},
+    {x:CW/2,y:CH/2-80,emoji:'😡',hp:1,target:4,atkT:0,dead:false},
+    {x:CW/2-40,y:CH/2+120,emoji:'😡',hp:1,target:0,atkT:0,dead:false},
+  ];
+}
+
+function initCracks(){
+  cracks=[];
+  // Cracks radiate from the gravel surface outward
+  for(let i=0;i<8;i++){
+    const angle=(i/8)*Math.PI*2+Math.random()*0.3;
+    cracks.push({
+      angle: angle,
+      innerR: GR+3,
+      length: 0, // grows over time
+      maxLength: 15+Math.random()*25,
+      width: 1,
+      branches: []
+    });
+  }
+}
+
+// Click
+canvas.addEventListener('click',(e)=>{
+  if(step!==0||!clickEnabled) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=CW/rect.width,sy=CH/rect.height;
+  const mx=(e.clientX-rect.left)*sx,my=(e.clientY-rect.top)*sy;
+  const gx=CW/2,gy=260;
+  if(Math.sqrt((mx-gx)**2+(my-gy)**2)<30){ step=1;stepTimer=0;clickEnabled=false;canvas.style.cursor='default'; }
+});
+canvas.addEventListener('mousemove',(e)=>{
+  if(step!==0||!clickEnabled) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=CW/rect.width,sy=CH/rect.height;
+  const mx=(e.clientX-rect.left)*sx,my=(e.clientY-rect.top)*sy;
+  canvas.style.cursor=Math.sqrt((mx-CW/2)**2+(my-260)**2)<30?'pointer':'default';
+});
+
+// ========== HELPERS ==========
+function drawEmoji(t,x,y,s){ cx.font=`${s}px serif`;cx.textAlign='center';cx.textBaseline='middle';cx.fillText(t,x,y); }
+
+function drawStone(x,y,r){
+  const g=cx.createRadialGradient(x-r*0.15,y-r*0.2,r*0.1,x,y,r);
+  g.addColorStop(0,'#b0a080');g.addColorStop(0.5,'#8a7a5a');g.addColorStop(1,'#5a4a30');
+  cx.fillStyle=g;cx.beginPath();cx.ellipse(x,y,r,r*0.85,0.1,0,Math.PI*2);cx.fill();
+  cx.strokeStyle='#3a3020';cx.lineWidth=2;cx.stroke();
+}
+
+function getBioZones(t){
+  const tr=MAX_BIO*t;
+  return{endoR:GR+tr*0.15,anaR:GR+tr*0.4,transR:GR+tr*0.6,outerR:GR+tr};
+}
+
+function drawBioLayers(t,show){
+  if(t<=0)return;
+  const z=getBioZones(t);
+  if(show.aerobic){cx.fillStyle='rgba(50,170,80,0.4)';cx.beginPath();cx.ellipse(GX,GY,z.outerR,z.outerR*0.85,0.1,0,Math.PI*2);cx.fill();cx.strokeStyle='rgba(50,170,80,0.5)';cx.lineWidth=1.5;cx.stroke();}
+  if(show.transition&&t>0.4){cx.fillStyle='rgba(180,160,50,0.35)';cx.beginPath();cx.ellipse(GX,GY,z.transR,z.transR*0.85,0.1,0,Math.PI*2);cx.fill();}
+  if(show.anaerobic&&t>0.55){cx.fillStyle='rgba(160,50,40,0.4)';cx.beginPath();cx.ellipse(GX,GY,z.anaR,z.anaR*0.85,0.1,0,Math.PI*2);cx.fill();}
+  if(show.endogenous&&t>0.75){cx.fillStyle='rgba(60,40,30,0.6)';cx.beginPath();cx.ellipse(GX,GY,z.endoR,z.endoR*0.85,0.1,0,Math.PI*2);cx.fill();}
+  drawStone(GX,GY,GR);
+}
+
+// ========== OVERVIEW ==========
+function drawOverview(){
+  const fx=160,fy=70,fw=600,fh=380;
+  const mediaTop=fy+75,mediaBot=fy+fh-55;
+  cx.strokeStyle='#4a6a8a';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(fx,fy+35);cx.lineTo(fx,fy+fh);cx.lineTo(fx+fw,fy+fh);cx.lineTo(fx+fw,fy+35);cx.stroke();
+  cx.fillStyle='#2a3a4a';cx.fillRect(fx+2,mediaBot,fw-4,fy+fh-55-mediaBot);
+  cx.fillStyle='#1a1e25';cx.fillRect(fx+2,mediaTop,fw-4,mediaBot-mediaTop);
+  for(let i=0;i<180;i++){
+    const gx=fx+10+(((i*7+42)*13)%(fw-20)),gy=mediaTop+5+(((i*11+42)*17)%(mediaBot-mediaTop-10));
+    const gr=4+(i%7)*1.2,sh=55+(i%5)*15;
+    const grd=cx.createRadialGradient(gx-gr*0.2,gy-gr*0.3,gr*0.1,gx,gy,gr);
+    grd.addColorStop(0,`rgb(${sh+40},${sh+30},${sh})`);grd.addColorStop(1,`rgb(${sh-10},${sh-15},${sh-25})`);
+    cx.fillStyle=grd;cx.beginPath();cx.ellipse(gx,gy,gr,gr*0.8,(i*0.5)%Math.PI,0,Math.PI*2);cx.fill();
+  }
+  // Sprinkler
+  cx.fillStyle='#4a5a6a';cx.fillRect(fx+fw/2-3,fy-10,6,50);
+  cx.strokeStyle='#5a6a7a';cx.lineWidth=2.5;
+  for(let a=0;a<4;a++){const angle=tick*0.012+a*Math.PI/2;cx.beginPath();cx.moveTo(fx+fw/2,fy+12);cx.lineTo(fx+fw/2+Math.cos(angle)*(fw/2-25),fy+12);cx.stroke();}
+  for(let i=0;i<12;i++){const dx=fx+30+i*((fw-60)/11),dp=((tick*1.2+i*18)%55)/55,dy=fy+22+dp*(mediaTop-fy-22);
+    if(dp<0.85){cx.fillStyle=`rgba(100,180,255,${0.4-dp*0.3})`;cx.beginPath();cx.arc(dx,dy,2,0,Math.PI*2);cx.fill();}}
+  // Glowing gravel
+  if(stepTimer>60){
+    clickEnabled=true;
+    const ga=0.4+0.3*Math.sin(tick*0.08),gx=fx+fw/2,gy=mediaTop+(mediaBot-mediaTop)*0.42;
+    cx.shadowColor='rgba(100,200,255,0.8)';cx.shadowBlur=20+10*Math.sin(tick*0.08);
+    cx.strokeStyle=`rgba(100,200,255,${ga})`;cx.lineWidth=3;cx.beginPath();cx.arc(gx,gy,18,0,Math.PI*2);cx.stroke();cx.shadowBlur=0;
+    const gg=cx.createRadialGradient(gx-3,gy-3,2,gx,gy,14);gg.addColorStop(0,'#b0a080');gg.addColorStop(1,'#6a5a40');
+    cx.fillStyle=gg;cx.beginPath();cx.ellipse(gx,gy,14,12,0.2,0,Math.PI*2);cx.fill();
+    drawEmoji('👆',gx,gy+30,28);
+  }
+  cx.fillStyle='#6a9aba';cx.font='700 18px "Outfit"';cx.textAlign='center';cx.fillText('Trickling Filter',fx+fw/2,fy-22);
+}
+
+// ========== ZOOM ==========
+function drawZoom(){
+  const prog=Math.min(1,stepTimer/90);
+  const oa=Math.max(0,1-prog*2);
+  if(oa>0){cx.globalAlpha=oa;drawOverview();cx.globalAlpha=1;}
+  const ga=Math.min(1,(prog-0.3)*2.5);
+  if(ga>0){cx.globalAlpha=ga;drawStone(GX,GY,GR*(0.3+prog*0.7));cx.globalAlpha=1;}
+  if(prog>=1&&stepTimer>100){step=2;stepTimer=0;}
+}
+
+// ========== STEPS ==========
+function drawStep2(){
+  drawStone(GX,GY,GR);
+  cx.fillStyle='rgba(200,190,160,0.3)';cx.font='700 18px "Outfit"';cx.textAlign='center';
+  cx.fillText('GRAVEL',GX,GY-5);cx.fillText('MEDIA',GX,GY+17);
+  cx.fillStyle='rgba(100,180,255,0.25)';cx.font='500 16px "Outfit"';
+  cx.fillText('↓ Wastewater trickling over surface ↓',GX,GY-GR-35);
+  for(let i=0;i<6;i++){const dp=((tick*0.7+i*25)%40)/40,dx=GX-50+i*20,dy=GY-GR-25+dp*18;
+    cx.fillStyle=`rgba(100,180,255,${0.3-dp*0.2})`;cx.beginPath();cx.arc(dx,dy,2.5,0,Math.PI*2);cx.fill();}
+  if(stepTimer>60)showNext();
+}
+
+function drawStep3(){
+  biofilmThickness=Math.min(0.35,stepTimer*0.0008);
+  drawBioLayers(biofilmThickness,{aerobic:true,transition:false,anaerobic:false,endogenous:false});
+  if(biofilmThickness>0.1){const z=getBioZones(biofilmThickness);
+    for(let i=0;i<5;i++){const a=i*Math.PI*2/5+tick*0.005;drawEmoji('😊',GX+Math.cos(a)*(z.outerR-10),GY+Math.sin(a)*(z.outerR-10)*0.85,24);}
+    for(let i=0;i<4;i++){const a=i*Math.PI*2/4+tick*0.008+0.5;const ex=GX+Math.cos(a)*(z.outerR+10),ey=GY+Math.sin(a)*(z.outerR+10)*0.85;
+      cx.fillStyle='rgba(160,120,50,0.5)';cx.beginPath();cx.arc(ex,ey,4,0,Math.PI*2);cx.fill();}}
+  if(stepTimer>180)showNext();
+}
+
+function drawStep4(){
+  biofilmThickness=0.35;
+  drawBioLayers(biofilmThickness,{aerobic:true,transition:false,anaerobic:false,endogenous:false});
+  const z=getBioZones(biofilmThickness);
+  for(let i=0;i<6;i++){const a=i*Math.PI*2/6+tick*0.004;drawEmoji('😊',GX+Math.cos(a)*(z.outerR-12),GY+Math.sin(a)*(z.outerR-12)*0.85,28);}
+  cx.fillStyle='rgba(100,200,255,0.5)';cx.font='700 18px "Outfit"';cx.textAlign='center';
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3+tick*0.006+1;cx.fillText('O₂',GX+Math.cos(a)*(z.outerR+28),GY+Math.sin(a)*(z.outerR+28)*0.85);}
+  for(let i=0;i<4;i++){const a=i*Math.PI*2/4+tick*0.007+2;const ex=GX+Math.cos(a)*(z.outerR+18),ey=GY+Math.sin(a)*(z.outerR+18)*0.85;
+    cx.fillStyle='rgba(160,120,50,0.6)';cx.beginPath();cx.arc(ex,ey,5,0,Math.PI*2);cx.fill();}
+  cx.fillStyle='#4ac06a';cx.font='700 22px "Outfit"';cx.fillText('AEROBIC ZONE',GX,GY-z.outerR*0.85-55);
+  cx.fillStyle='#6aaa7a';cx.font='500 16px "Outfit"';cx.fillText('😊 Happy organisms eating BOD with O₂',GX,GY-z.outerR*0.85-30);
+  if(stepTimer>100)showNext();
+}
+
+function drawStep5(){
+  biofilmThickness=0.55;
+  drawBioLayers(biofilmThickness,{aerobic:true,transition:true,anaerobic:false,endogenous:false});
+  const z=getBioZones(biofilmThickness);
+  for(let i=0;i<4;i++){const a=i*Math.PI*2/4+tick*0.004;drawEmoji('😊',GX+Math.cos(a)*(z.outerR-10),GY+Math.sin(a)*(z.outerR-10)*0.85,20);}
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3+tick*0.003+1;drawEmoji('😰',GX+Math.cos(a)*((z.transR+z.anaR)/2),GY+Math.sin(a)*((z.transR+z.anaR)/2)*0.85,22);}
+  cx.fillStyle='#c0b040';cx.font='700 22px "Outfit"';cx.textAlign='center';
+  cx.fillText('TRANSITION ZONE',GX,GY-z.outerR*0.85-55);
+  cx.fillStyle='#a0a050';cx.font='500 16px "Outfit"';
+  cx.fillText('😰 O₂ can\'t penetrate deep enough!',GX,GY-z.outerR*0.85-30);
+  if(stepTimer>100)showNext();
+}
+
+function drawStep6(){
+  biofilmThickness=0.75;
+  drawBioLayers(biofilmThickness,{aerobic:true,transition:true,anaerobic:true,endogenous:false});
+  const z=getBioZones(biofilmThickness);
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3+tick*0.004;drawEmoji('😊',GX+Math.cos(a)*(z.outerR-10),GY+Math.sin(a)*(z.outerR-10)*0.85,18);}
+  for(let i=0;i<2;i++){const a=i*Math.PI+tick*0.003;drawEmoji('😰',GX+Math.cos(a)*((z.transR+z.anaR)/2),GY+Math.sin(a)*((z.transR+z.anaR)/2)*0.85,18);}
+  for(let i=0;i<4;i++){const a=i*Math.PI*2/4+tick*0.003+0.5;drawEmoji('😤',GX+Math.cos(a)*((z.anaR+z.endoR)/2),GY+Math.sin(a)*((z.anaR+z.endoR)/2)*0.85,24);}
+  // Gas bubbles
+  for(let i=0;i<5;i++){const bp=((tick*0.4+i*25)%50)/50,bx=GX-35+i*18,by=GY+z.anaR*0.4-bp*35;
+    cx.fillStyle=`rgba(180,200,100,${0.35-bp*0.3})`;cx.beginPath();cx.arc(bx,by,3+bp*2,0,Math.PI*2);cx.fill();}
+  cx.fillStyle='#c05040';cx.font='700 22px "Outfit"';cx.textAlign='center';
+  cx.fillText('ANAEROBIC ZONE — No O₂!',GX,GY-z.outerR*0.85-55);
+  cx.fillStyle='#a06050';cx.font='500 16px "Outfit"';
+  cx.fillText('😤 Producing H₂S & CH₄ gases 💨',GX,GY-z.outerR*0.85-30);
+  if(stepTimer>100)showNext();
+}
+
+function drawStep7(){
+  biofilmThickness=1.0;
+  drawBioLayers(biofilmThickness,{aerobic:true,transition:true,anaerobic:true,endogenous:true});
+  const z=getBioZones(biofilmThickness);
+  for(let i=0;i<3;i++){const a=i*Math.PI*2/3+tick*0.004;drawEmoji('😊',GX+Math.cos(a)*(z.outerR-8),GY+Math.sin(a)*(z.outerR-8)*0.85,15);}
+  for(let i=0;i<2;i++){const a=i*Math.PI+tick*0.003;drawEmoji('😤',GX+Math.cos(a)*((z.anaR+z.endoR)/2),GY+Math.sin(a)*((z.anaR+z.endoR)/2)*0.85,16);}
+  for(let i=0;i<4;i++){const a=i*Math.PI*2/4+tick*0.003+1;const sh=(Math.random()-0.5)*3;
+    drawEmoji('😡',GX+Math.cos(a)*((z.endoR+GR)/2)+sh,GY+Math.sin(a)*((z.endoR+GR)/2)*0.85+sh,24);}
+  cx.fillStyle='#7a5040';cx.font='700 22px "Outfit"';cx.textAlign='center';
+  cx.fillText('ENDOGENOUS ZONE — No Food!',GX,GY-z.outerR*0.85-55);
+  cx.fillStyle='#8a6a5a';cx.font='500 16px "Outfit"';
+  cx.fillText('😡 Starving! No substrate reaches here!',GX,GY-z.outerR*0.85-30);
+  cx.fillStyle='#e08040';cx.font='600 17px "Outfit"';
+  cx.fillText('What happens when organisms starve? ⚔️',GX,GY+z.outerR*0.85+45);
+  if(stepTimer>80)showNext();
+}
+
+function drawStep8(){
+  // SWORD FIGHT
+  cx.fillStyle='rgba(40,20,15,0.95)';cx.fillRect(50,30,CW-100,CH-100);
+  cx.strokeStyle='#5a3020';cx.lineWidth=2;cx.strokeRect(50,30,CW-100,CH-100);
+  cx.fillStyle='#e04030';cx.font='800 26px "Outfit"';cx.textAlign='center';
+  cx.fillText('⚔️  ENDOGENOUS ZONE — SURVIVAL MODE!  ⚔️',CW/2,70);
+  cx.fillStyle='#c08060';cx.font='500 16px "Outfit"';
+  cx.fillText('No food left! Organisms consuming each other!',CW/2,98);
+  // No food signs
+  cx.font='700 45px serif';cx.fillText('🍽️',130,175);cx.fillStyle='#c03020';cx.font='800 55px serif';cx.fillText('❌',130,175);
+  cx.fillText('🍽️',CW-130,175);cx.fillText('❌',CW-130,175);
+  
+  fighters.forEach((f,i)=>{
+    if(f.dead)return;f.atkT++;
+    const tgt=fighters[f.target];
+    if(tgt&&!tgt.dead){
+      const dx=tgt.x-f.x,dy=tgt.y-f.y,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>50){f.x+=dx/dist*0.4;f.y+=dy/dist*0.4;}
+      if(dist<60&&f.atkT%80===0){
+        tgt.hp--;
+        cx.fillStyle='rgba(255,200,50,0.7)';cx.font='700 40px serif';cx.textAlign='center';
+        cx.fillText('💥',(f.x+tgt.x)/2,(f.y+tgt.y)/2);
+        if(tgt.hp<=0){tgt.dead=true;tgt.emoji='☠️';}
+      }
+      if(dist<70){cx.font='700 28px serif';cx.textAlign='center';cx.fillText('⚔️',(f.x+tgt.x)/2,(f.y+tgt.y)/2-18);}
+    }
+    const sh=f.dead?0:(Math.random()-0.5)*3;
+    drawEmoji(f.emoji,f.x+sh,f.y+sh,f.dead?40:45);
+    if(!f.dead&&stepTimer>30&&stepTimer<250){
+      const says=['No food!','I\'m hungry!','Survive!','Fight!','Must eat!','Help!'];
+      if(stepTimer%130<65&&i<3){cx.fillStyle='rgba(255,255,255,0.8)';cx.font='600 14px "Outfit"';cx.fillText(says[i],f.x,f.y-35);}
+    }
+  });
+  const dc=fighters.filter(f=>f.dead).length;
+  cx.fillStyle='#aa6050';cx.font='700 18px "Outfit"';cx.textAlign='center';
+  cx.fillText(`☠️ Casualties: ${dc} / ${fighters.length}`,CW/2,CH-85);
+  cx.fillStyle='#8a7060';cx.font='500 15px "Outfit"';
+  cx.fillText('This is ENDOGENOUS RESPIRATION — cells consuming their own mass',CW/2,CH-62);
+  if(stepTimer>350)showNext();
+}
+
+function drawStep9(){
+  // DRAMATIC SLOUGHING
+  sloughTimer++;
+  
+  // Sub-phases with timing
+  const crackDur=180;    // 3 sec — cracks appear
+  const vibDur=150;      // 2.5 sec — vibrations
+  const gasDur=120;      // 2 sec — gas pressure
+  const breakDur=90;     // 1.5 sec — break moment
+  const fallDur=180;     // 3 sec — falling
+  
+  const t=sloughTimer;
+  
+  // Calculate shake
+  if(t>crackDur && t<crackDur+vibDur+gasDur+breakDur){
+    shakeAmount = Math.min(6, (t-crackDur)*0.02) * Math.sin(t*0.3);
+  } else {
+    shakeAmount *= 0.95;
+  }
+  
+  cx.save();
+  cx.translate(shakeAmount, shakeAmount*0.5);
+  
+  // Draw biofilm with all zones
+  biofilmThickness=1.0;
+  const z=getBioZones(1);
+  
+  // If not yet broken, draw full biofilm
+  if(t < crackDur+vibDur+gasDur+breakDur){
+    drawBioLayers(1,{aerobic:true,transition:true,anaerobic:true,endogenous:true});
+    
+    // CRACKS — appear and grow
+    if(t > 0){
+      cx.strokeStyle='rgba(30,20,10,0.8)';
+      cracks.forEach(cr=>{
+        cr.length = Math.min(cr.maxLength, cr.length + 0.15);
+        cr.width = Math.min(3, 1 + t*0.005);
+        const x1=GX+Math.cos(cr.angle)*(cr.innerR);
+        const y1=GY+Math.sin(cr.angle)*(cr.innerR)*0.85;
+        const x2=GX+Math.cos(cr.angle)*(cr.innerR+cr.length);
+        const y2=GY+Math.sin(cr.angle)*(cr.innerR+cr.length)*0.85;
+        cx.lineWidth=cr.width;
+        cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();
+        
+        // Branch cracks after some time
+        if(t>crackDur*0.5 && cr.branches.length===0){
+          cr.branches.push({
+            angle:cr.angle+(Math.random()-0.5)*0.5,
+            startR:cr.innerR+cr.length*0.6,
+            length:0, maxLength:8+Math.random()*10
+          });
+        }
+        cr.branches.forEach(br=>{
+          br.length=Math.min(br.maxLength,br.length+0.1);
+          const bx1=GX+Math.cos(br.angle)*br.startR;
+          const by1=GY+Math.sin(br.angle)*br.startR*0.85;
+          const bx2=GX+Math.cos(br.angle)*(br.startR+br.length);
+          const by2=GY+Math.sin(br.angle)*(br.startR+br.length)*0.85;
+          cx.lineWidth=cr.width*0.6;
+          cx.beginPath();cx.moveTo(bx1,by1);cx.lineTo(bx2,by2);cx.stroke();
+        });
+      });
+    }
+    
+    // Vibration phase — organisms shaking
+    if(t>crackDur){
+      for(let i=0;i<5;i++){
+        const a=i*Math.PI*2/5+tick*0.01;
+        const sh=(Math.random()-0.5)*shakeAmount;
+        drawEmoji('😱',GX+Math.cos(a)*(z.outerR-12)+sh,GY+Math.sin(a)*(z.outerR-12)*0.85+sh,20);
+      }
+      for(let i=0;i<3;i++){
+        const a=i*Math.PI*2/3+0.5;const sh=(Math.random()-0.5)*shakeAmount;
+        drawEmoji('😨',GX+Math.cos(a)*((z.anaR+z.endoR)/2)+sh,GY+Math.sin(a)*((z.anaR+z.endoR)/2)*0.85+sh,18);
+      }
+    }
+    
+    // Gas pressure phase — bubbles pushing from inside
+    if(t>crackDur+vibDur){
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2;
+        const bp=((t*0.6+i*20)%30)/30;
+        const br=GR+5+bp*(z.outerR-GR);
+        const bx=GX+Math.cos(a)*br,by=GY+Math.sin(a)*br*0.85;
+        cx.fillStyle=`rgba(200,220,100,${0.4-bp*0.35})`;
+        cx.beginPath();cx.arc(bx,by,3+bp*3,0,Math.PI*2);cx.fill();
+      }
+    }
+    
+    // Labels during cracking
+    if(t<crackDur){
+      cx.fillStyle='#e0a040';cx.font='700 22px "Outfit"';cx.textAlign='center';
+      cx.fillText('⚠️ Cracks forming at the base!',GX,GY-z.outerR*0.85-55);
+      cx.fillStyle='#c09050';cx.font='500 15px "Outfit"';
+      cx.fillText('Endogenous zone losing adhesion to gravel',GX,GY-z.outerR*0.85-30);
+    } else if(t<crackDur+vibDur){
+      cx.fillStyle='#e08040';cx.font='700 22px "Outfit"';cx.textAlign='center';
+      cx.fillText('⚡ Biofilm is shaking! Losing grip!',GX,GY-z.outerR*0.85-55);
+      cx.fillStyle='#c07040';cx.font='500 15px "Outfit"';
+      cx.fillText('Dead organisms can\'t hold on anymore 😱',GX,GY-z.outerR*0.85-30);
+    } else if(t<crackDur+vibDur+gasDur){
+      cx.fillStyle='#e06030';cx.font='700 22px "Outfit"';cx.textAlign='center';
+      cx.fillText('💨 Gas pressure building from inside!',GX,GY-z.outerR*0.85-55);
+      cx.fillStyle='#c06040';cx.font='500 15px "Outfit"';
+      cx.fillText('H₂S & CH₄ pushing the biofilm away',GX,GY-z.outerR*0.85-30);
+    } else {
+      cx.fillStyle='#ff4030';cx.font='800 26px "Outfit"';cx.textAlign='center';
+      cx.fillText('💥 BREAKING APART! 💥',GX,GY-z.outerR*0.85-55);
+    }
+    
+  } else {
+    // FALLING PHASE — biofilm detached
+    if(sloughedPieces.length===0){
+      for(let i=0;i<16;i++){
+        const angle=(i/16)*Math.PI*2;
+        sloughedPieces.push({
+          x:GX+Math.cos(angle)*(GR+MAX_BIO*0.5),
+          y:GY+Math.sin(angle)*(GR+MAX_BIO*0.5)*0.85,
+          vx:Math.cos(angle)*1.2,
+          vy:0.5+Math.random()*2,
+          r:10+Math.random()*18,
+          rot:Math.random()*Math.PI*2,
+          rotSpd:(Math.random()-0.5)*0.06,
+          emoji:['😱','😨','🫠','😵','☠️'][Math.floor(Math.random()*5)]
+        });
+      }
+    }
+    
+    const fallProg=(t-(crackDur+vibDur+gasDur+breakDur))/fallDur;
+    
+    // Shrinking remaining biofilm
+    const remFrac=Math.max(0,1-fallProg*2);
+    if(remFrac>0){
+      cx.fillStyle=`rgba(50,160,80,${0.3*remFrac})`;
+      const rr=GR+MAX_BIO*remFrac;
+      cx.beginPath();cx.ellipse(GX,GY,rr,rr*0.85,0.1,0,Math.PI*2);cx.fill();
+    }
+    
+    // Clean gravel
+    drawStone(GX,GY,GR);
+    cx.fillStyle='rgba(200,190,160,0.3)';cx.font='700 16px "Outfit"';cx.textAlign='center';
+    cx.fillText('CLEAN!',GX,GY+5);
+    
+    // Falling chunks with emojis
+    const fallAlpha=Math.max(0,1-fallProg*0.8);
+    sloughedPieces.forEach(sp=>{
+      sp.x+=sp.vx;sp.y+=sp.vy;sp.vy+=0.04;sp.rot+=sp.rotSpd;
+      if(fallAlpha>0){
+        cx.globalAlpha=fallAlpha;
+        cx.save();cx.translate(sp.x,sp.y);cx.rotate(sp.rot);
+        cx.fillStyle='rgba(80,120,60,0.5)';cx.beginPath();
+        for(let j=0;j<6;j++){const a=(j/6)*Math.PI*2;const r=sp.r*(0.6+0.4*Math.sin(a*3+sp.rot));
+          if(j===0)cx.moveTo(Math.cos(a)*r,Math.sin(a)*r);else cx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}
+        cx.closePath();cx.fill();cx.restore();
+        drawEmoji(sp.emoji,sp.x,sp.y,20);
+        cx.globalAlpha=1;
+      }
+    });
+    
+    cx.fillStyle='#e08040';cx.font='800 24px "Outfit"';cx.textAlign='center';
+    cx.fillText('💥 SLOUGHING COMPLETE! 💥',GX,60);
+    cx.fillStyle='#c09060';cx.font='500 16px "Outfit"';
+    cx.fillText('Detached biofilm → carried to secondary clarifier',GX,88);
+  }
+  
+  cx.restore();
+  
+  if(sloughTimer > crackDur+vibDur+gasDur+breakDur+fallDur+60) showNext();
+}
+
+function drawStep10(){
+  drawStone(GX,GY,GR);
+  cx.fillStyle='rgba(200,190,160,0.3)';cx.font='700 18px "Outfit"';cx.textAlign='center';
+  cx.fillText('GRAVEL',GX,GY-5);cx.fillText('MEDIA',GX,GY+17);
+  cx.fillStyle='#6a9aba';cx.font='700 24px "Outfit"';
+  cx.fillText('🔄 Cycle Restarts!',GX,GY-GR-55);
+  cx.fillStyle='#5a8a9a';cx.font='500 17px "Outfit"';
+  cx.fillText('Fresh biofilm will grow again',GX,GY-GR-28);
+  cx.fillText('This process repeats continuously in the filter',GX,GY+GR+45);
+  document.getElementById('btn-replay').style.display='inline-block';
+}
+
+// ========== STATUS BAR ==========
+function drawStatus(){
+  const texts={
+    0:{t:'Click on the glowing gravel to zoom in 👆',c:'#6ac0e0'},
+    1:{t:'Zooming in...',c:'#6ac0e0'},
+    2:{t:'A single piece of gravel media',c:'#8aa0b0'},
+    3:{t:'Stage 1: Microorganisms begin attaching',c:'#4ac06a'},
+    4:{t:'AEROBIC ZONE — 😊 Happy organisms with O₂ and food',c:'#4ac06a'},
+    5:{t:'TRANSITION ZONE — 😰 O₂ depleting inward',c:'#c0b040'},
+    6:{t:'ANAEROBIC ZONE — 😤 No oxygen! Gases forming!',c:'#c05040'},
+    7:{t:'ENDOGENOUS ZONE — 😡 Starving! No food!',c:'#7a5040'},
+    8:{t:'⚔️ SURVIVAL MODE — Organisms fighting each other!',c:'#e04030'},
+    9:{t:sloughTimer<180?'⚠️ Cracks forming...':sloughTimer<330?'⚡ Biofilm shaking!':sloughTimer<450?'💨 Gas pressure!':sloughTimer<540?'💥 BREAKING!':'😱 Falling away!',c:'#e08040'},
+    10:{t:'🔄 Clean gravel — cycle restarts!',c:'#6a9aba'}
+  };
+  const info=texts[step]||{t:'',c:'#5a7a9a'};
+  cx.fillStyle='rgba(10,18,28,0.9)';cx.fillRect(0,CH-50,CW,50);
+  cx.strokeStyle='rgba(60,100,140,0.3)';cx.lineWidth=1;cx.beginPath();cx.moveTo(0,CH-50);cx.lineTo(CW,CH-50);cx.stroke();
+  cx.fillStyle=info.c;cx.font='700 17px "Outfit"';cx.textAlign='center';cx.fillText(info.t,CW/2,CH-22);
+  cx.fillStyle='rgba(100,140,180,0.3)';cx.font='500 12px "Outfit"';cx.textAlign='right';
+  cx.fillText(`Step ${Math.min(step,10)} / 10`,CW-20,CH-22);
+  cx.fillStyle='rgba(100,140,180,0.06)';cx.font='500 10px "Outfit"';cx.textAlign='center';
+  cx.fillText('SAGAR DODEJA SIR (Ex. IES)',CW/2,18);
+}
+
+// ========== RENDER ==========
+function render(){
+  tick++;stepTimer++;
+  cx.clearRect(0,0,CW,CH);cx.fillStyle='#0d1520';cx.fillRect(0,0,CW,CH);
+  try{
+    if(step===0)drawOverview();
+    else if(step===1)drawZoom();
+    else if(step===2)drawStep2();
+    else if(step===3)drawStep3();
+    else if(step===4)drawStep4();
+    else if(step===5)drawStep5();
+    else if(step===6)drawStep6();
+    else if(step===7)drawStep7();
+    else if(step===8)drawStep8();
+    else if(step===9)drawStep9();
+    else if(step===10)drawStep10();
+    drawStatus();
+  }catch(e){cx.fillStyle='#f00';cx.font='14px "Outfit"';cx.textAlign='left';cx.fillText('Error: '+e.message,20,30);console.error(e);}
+  requestAnimationFrame(render);
+}
+render();
+</script>
+</body>
+</html>
